@@ -1,7 +1,8 @@
-% @Author: dliaomcp
-% @Date:   2018-04-25 19:12:40
-% @Last Modified by:   Dominic Liao-McPherson
-% @Last Modified time: 2018-08-06 18:39:04
+% This file is part of the fbstab-matlab library
+%
+% https://github.com/dliaomcp/fbstab-matlab
+%
+% and is subject to the BSD-3-Clause license 
 
 clear all
 close all
@@ -23,7 +24,7 @@ qp.f = f;
 qp.A = A;
 qp.b = b;
 v0 = zeros(size(b));
-[x,v,out] = fbstab(qp,x0,v0,opts);
+[x,v,out] = fbstab_dense(qp,x0,v0,opts);
 out
 
 % infeasible
@@ -38,7 +39,7 @@ qp.A = A;
 qp.b = b;
 
 v0 = zeros(size(b));
-[x,v,out] = fbstab(qp,x0,v0,opts);
+[x,v,out] = fbstab_dense(qp,x0,v0,opts);
 out
 
 % unbounded below, [0;1] is an unbounded direction
@@ -54,7 +55,7 @@ qp.b = b;
 
 v0 = zeros(size(b));
 
-[x,v,out] = fbstab(qp,x0,v0,opts);
+[x,v,out] = fbstab_dense(qp,x0,v0,opts);
 out
 
 
