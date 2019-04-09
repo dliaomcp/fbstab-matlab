@@ -2,7 +2,7 @@
 A MATLAB implementation of the Proximally Stabilized Fischer-Burmeister (FBstab) quadratic programming solver. 
 
 ## Instructions
-Navigate to the root folder then run setpath.m. The directory is arranged assuming that evening is run from the root.
+Navigate to the root folder then run setpath.m. The directory is arranged assuming that everything is run from the root.
 
 Unit tests can be found in the tests/ folder, MPC examples can be found under mpc_examples/
 
