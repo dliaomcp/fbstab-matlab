@@ -216,7 +216,9 @@ methods(Access = public)
 			rk.nres(x);
 			% convergence check
 			Ei = ri.norm();
-			if (Ei <= itol && norm(rk) < Epen)||(Ei <= o.itol_min)
+			dx.vcopy(x);
+			dx.axpy(xbar,-1);
+			if (Ei <= itol*min(1,norm(dx)) && norm(rk) < Epen)||(Ei <= o.itol_min) 
 				o.print_detailed_footer(itol,ri);
 				return
 			end

@@ -9,11 +9,7 @@ close all
 clc
 
 % call the servo motor example
-[mpc,qpc,qp,sys,simin] = load_servo(50);
-
-nx = qpc.nx;
-nu = qpc.nu;
-N = qpc.N;
+[mpc,sys,simin] = load_servo_example(50);
 
 alpha = 0.95;
 % create the data and linsys objects
@@ -40,26 +36,5 @@ opts.linear_solver = 'ricatti';
 tic
 [xopt,out] = fbstab_mpc(x,mpc,opts);
 toc
-
-% get control sequence
-z = xopt.z;
-z = reshape(z,[nx+nu,N+1]);
-uopt = z(nx+1:end,:);
-uopt = uopt(:);
-uopt = reshape(uopt,[nu,N+1]);
-
-% compare with the condensed solution
-s.H = (qpc.H + qpc.H')/2;
-s.f = qpc.h + qpc.Tx*simin.xtrg + qpc.Tu*simin.utrg + qpc.Tf*simin.x0;
-s.A = qpc.G;
-s.b = qpc.g + qpc.Tb*simin.x0;
-
-'dense quadprog'
-tic
-u = quadprog(s.H,s.f,s.A,s.b);
-toc
-u = reshape(u,[nu,N+1]);
-
-should_be_zero = norm(u - uopt)
 
 

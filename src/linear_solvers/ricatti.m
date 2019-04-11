@@ -19,10 +19,11 @@ classdef ricatti < handle
 	mus;
 	gamma;
 
-	L; %
+	L;
 	P;
 	M
 	SM;
+	AM;
 	Sigma;
 
 	h;
@@ -42,6 +43,7 @@ classdef ricatti < handle
 		o.M = zeros(nx,nx,N+1);
 		o.L = zeros(nx,nx,N+1);
 		o.SM = zeros(nu,nx,N+1);
+		o.AM = zeros(nx,nx,N+1);
 
 		o.h = zeros(nx,N+1);
 		o.theta = zeros(nx,N+1);
@@ -82,7 +84,6 @@ classdef ricatti < handle
 
 		% temp variables
 		Linv = zeros(nx,nx);
-		AM = zeros(nx,nx);
 
 		% Begin the riccati recursion
 		% base case Pi = sigma I, L = chol(Pi)
@@ -96,7 +97,7 @@ classdef ricatti < handle
 			o.M(:,:,i) = chol(o.M(:,:,i),'lower');
 
 			% compute AM = A*inv(M)' and SM = S*inv(M)'
-			AM = o.data.Ak(:,:,i)/(o.M(:,:,i)');
+			o.AM(:,:,i) = o.data.Ak(:,:,i)/(o.M(:,:,i)');
 			o.SM(:,:,i) = S(:,:,i)/(o.M(:,:,i)');
 
 			% compute Sigma = chol(R - S*inv(QQ)*S')
@@ -105,12 +106,12 @@ classdef ricatti < handle
 			o.Sigma(:,:,i) = chol(o.Sigma(:,:,i),'lower');
 
 			% compute P = (A*inv(QQ)*S' - B)* inv(Sigma)';
-			o.P(:,:,i) = AM*o.SM(:,:,i)' - o.data.Bk(:,:,i);
+			o.P(:,:,i) = o.AM(:,:,i)*o.SM(:,:,i)' - o.data.Bk(:,:,i);
 			o.P(:,:,i) = o.P(:,:,i)/(o.Sigma(:,:,i)');
 
 			% compute Pi k+1
 			o.L(:,:,i+1) = o.P(:,:,i)*o.P(:,:,i)' + ...
-			AM*AM' + sigma*eye(nx);
+			o.AM(:,:,i)*o.AM(:,:,i)' + sigma*eye(nx);
 
 			% compute a cholesky factorization of Pi k+1
 			o.L(:,:,i+1) = chol(o.L(:,:,i+1),'lower');
@@ -147,25 +148,21 @@ classdef ricatti < handle
 		o.h(:,1) = o.L(:,:,1)\o.theta(:,1);
 		o.h(:,1) = o.L(:,:,1)'\o.h(:,1) - r1(1:nx);
 		for i = 1:N
-			rl = r2(1 + (i-1)*nx:i*nx);
 			ii = (i-1)*(nx+nu);
-			rx = r1(1+ii:ii+nx);
-			ru = r1(ii+nx+1:ii+nx+nu);
-			rlp = r2(1 + i*nx:(i+1)*nx);
 			iii = i*(nx+nu);
+			ru = r1(ii+nx+1:ii+nx+nu);
 			rxp = r1(1+iii:iii+nx);
+			rlp = r2(1 + i*nx:(i+1)*nx);
 
 			% compute theta(i+1)
 			rt = ru+ o.SM(:,:,i)*linsolve(o.M(:,:,i),o.h(:,i),LT);
 			rt = linsolve(o.Sigma(:,:,i),rt,LT);
 
-			o.theta(:,i+1) = o.P(:,:,i)*rt;
-		
 			rt2 = linsolve(o.M(:,:,i),o.h(:,i),LT);
-			rt2 = linsolve(o.M(:,:,i)',rt2,UT);
 
-			o.theta(:,i+1) = ...
-			o.theta(:,i+1) + rlp + o.data.Ak(:,:,i)*rt2;
+			o.theta(:,i+1) = o.P(:,:,i)*rt;
+			o.theta(:,i+1) = o.theta(:,i+1) + o.AM(:,:,i)*rt2;
+			o.theta(:,i+1) = o.theta(:,i+1) + rlp;
 
 			% compute o.h(i+1)
 			o.h(:,i+1) = linsolve(o.L(:,:,i+1),o.theta(:,i+1),LT);
@@ -207,9 +204,9 @@ classdef ricatti < handle
 			dx.z(uidx) = linsolve(o.Sigma(:,:,i)',dx.z(uidx),UT);
 
 			% compute x
-			dx.z(xidx) = o.data.Ak(:,:,i)'*lp + o.h(:,i);
-			dx.z(xidx) = ...
-			o.SM(:,:,i)' * dx.z(uidx) + linsolve(o.M(:,:,i),dx.z(xidx),LT);
+			dx.z(xidx) =  linsolve(o.M(:,:,i),o.h(:,i),LT);
+			dx.z(xidx) = o.AM(:,:,i)'*lp + dx.z(xidx);
+			dx.z(xidx) = o.SM(:,:,i)' * dx.z(uidx) + dx.z(xidx);
 			dx.z(xidx) = -linsolve(o.M(:,:,i)',dx.z(xidx),UT);
 
 			% compute lambda
@@ -231,6 +228,7 @@ classdef ricatti < handle
 			A(i,:) = d(i)*A(i,:);
 		end
 	end
+	
 	% compute an element of the C-differential 
 	function [gamma,mu] = dphi(o,a,b,nv)
 		[~,~,q] = opt_sz(o.data);
