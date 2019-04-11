@@ -312,10 +312,11 @@ function [x,v,E,niters] = pfb(qp,x0,v0,xbar,vbar,sigma,tol,alpha,niters,max_iter
 		r1 = -(qp.H*x + qp.f + qp.A'*v + sigma*(x - xbar));
 		r2 = -phi(y,v,alpha);
 		R = -[r1;r2];
-
+        
+        ER = norm(x-xbar) + norm(v-vbar);
 		% convergence check
 		E = norm(R);
-		if E <= tol || niters >= max_iters
+		if E <= tol*min(1,ER) || niters >= max_iters
 			break;
 		end
 
