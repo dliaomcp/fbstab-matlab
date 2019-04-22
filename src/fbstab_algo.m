@@ -292,11 +292,11 @@ methods(Access = public)
 			a1 = int32(out.prox_iters);
 			a2 = int32(o.max_prox_iters);
 
-			fprintf('Proximal iterations: %d out of %d\n', a1, a2);
+			% fprintf('Proximal iterations: %d out of %d\n', a1, a2);
 
 			a3 = int32(out.newton_iters);
 			a4 = int32(o.max_newton_iters);
-			fprintf('Newton iterations: %d out of %d\n', a3, a4);
+			% fprintf('Newton iterations: %d out of %d\n', a3, a4);
 			fprintf('%10s  %10s  %10s  %10s\n','|rz|','|rl|','|rv|','Tolerance');
 			fprintf('%10.4e  %10.4e  %10.4e  %10.4e\n',rz,rl,rv,o.tol);
 		end
@@ -313,7 +313,7 @@ methods(Access = public)
 			[rz,rl,rv] = rk.norms();
 			a1 = int32(prox_iters);
 			a2 = int32(newton_iters);
-			fprintf('%12d %12d %12.4e %12.4e %12.4e %12.4e %12.4e\n',a1,a2,rz,rl,rv,ri.norm(),itol);
+			% fprintf('%12d %12d %12.4e %12.4e %12.4e %12.4e %12.4e\n',a1,a2,rz,rl,rv,ri.norm(),itol);
 		end
 	end
 
@@ -331,7 +331,7 @@ methods(Access = public)
 		if o.display_level == 3
 			[rz,rl,rv] = r.norms();
 			a1 = int32(iter);
-			fprintf('%10d  %10e  %10e  %10e  %10e\n',a1,step_len,rz,rl,rv);
+			% fprintf('%10d  %10e  %10e  %10e  %10e\n',a1,step_len,rz,rl,rv);
 		end
 
 	end
