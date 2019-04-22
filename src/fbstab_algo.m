@@ -288,8 +288,15 @@ methods(Access = public)
 			end
 
 			[rz,rl,rv] = r.norms();
-			fprintf('Proximal iterations: %d out of %d\n', int32(out.prox_iters), int32(o.max_prox_iters));
-			fprintf('Newton iterations: %d out of %d\n', int32(out.newton_iters),int32(o.max_newton_iters));
+
+			a1 = int32(out.prox_iters);
+			a2 = int32(o.max_prox_iters);
+
+			fprintf('Proximal iterations: %d out of %d\n', a1, a2);
+
+			a3 = int32(out.newton_iters);
+			a4 = int32(o.max_newton_iters);
+			fprintf('Newton iterations: %d out of %d\n', a3, a4);
 			fprintf('%10s  %10s  %10s  %10s\n','|rz|','|rl|','|rv|','Tolerance');
 			fprintf('%10.4e  %10.4e  %10.4e  %10.4e\n',rz,rl,rv,o.tol);
 		end
@@ -304,13 +311,17 @@ methods(Access = public)
 	function print_iter_line(o,prox_iters,newton_iters,rk,ri,itol)
 		if o.display_level == 2
 			[rz,rl,rv] = rk.norms();
-			fprintf('%12d %12d %12.4e %12.4e %12.4e %12.4e %12.4e\n',int32(prox_iters),int32(newton_iters),rz,rl,rv,ri.norm(),itol);
+			a1 = int32(prox_iters);
+			a2 = int32(newton_iters);
+			fprintf('%12d %12d %12.4e %12.4e %12.4e %12.4e %12.4e\n',a1,a2,rz,rl,rv,ri.norm(),itol);
 		end
 	end
 
 	function print_detailed_header(o,prox_iters, newton_iters, r)
 		if o.display_level == 3
-			fprintf('Begin Prox Iter: %d, Total Newton Iters: %d, Residual: %6.4e\n',int32(prox_iters),int32(newton_iters),r.norm());
+			a1 = int32(prox_iters);
+			a2 = int32(newton_iters);
+			fprintf('Begin Prox Iter: %d, Total Newton Iters: %d, Residual: %6.4e\n',a1,a2,r.norm());
 
 			fprintf('%10s  %10s  %10s  %10s  %10s\n','Iter','Step Size','|rz|','|rl|','|rv|');
 		end
@@ -319,7 +330,8 @@ methods(Access = public)
 	function print_detailed_line(o,iter,step_len,r)
 		if o.display_level == 3
 			[rz,rl,rv] = r.norms();
-			fprintf('%10d  %10e  %10e  %10e  %10e\n',int32(iter),step_len,rz,rl,rv);
+			a1 = int32(iter);
+			fprintf('%10d  %10e  %10e  %10e  %10e\n',a1,step_len,rz,rl,rv);
 		end
 
 	end
