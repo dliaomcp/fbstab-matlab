@@ -294,8 +294,8 @@ methods(Access = public)
 
 			% fprintf('Proximal iterations: %d out of %d\n', a1, a2);
 
-% 			a3 = int32(out.newton_iters);
-% 			a4 = int32(o.max_newton_iters);
+			a3 = int32(out.newton_iters);
+			a4 = int32(o.max_newton_iters);
 			% fprintf('Newton iterations: %d out of %d\n', a3, a4);
 % 			fprintf('%10s  %10s  %10s  %10s\n','|rz|','|rl|','|rv|','Tolerance');
 % 			fprintf('%10.4e  %10.4e  %10.4e  %10.4e\n',rz,rl,rv,o.tol);
@@ -311,16 +311,16 @@ methods(Access = public)
 	function print_iter_line(o,prox_iters,newton_iters,rk,ri,itol)
 		if o.display_level == 2
 			[rz,rl,rv] = rk.norms();
-% 			a1 = int32(prox_iters);
-% 			a2 = int32(newton_iters);
+			a1 = int32(prox_iters);
+			a2 = int32(newton_iters);
 			% fprintf('%12d %12d %12.4e %12.4e %12.4e %12.4e %12.4e\n',a1,a2,rz,rl,rv,ri.norm(),itol);
 		end
 	end
 
 	function print_detailed_header(o,prox_iters, newton_iters, r)
 		if o.display_level == 3
-% 			a1 = int32(prox_iters);
-% 			a2 = int32(newton_iters);
+			a1 = int32(prox_iters);
+			a2 = int32(newton_iters);
 			% fprintf('Begin Prox Iter: %d, Total Newton Iters: %d, Residual: %6.4e\n',a1,a2,r.norm());
 
 % 			fprintf('%10s  %10s  %10s  %10s  %10s\n','Iter','Step Size','|rz|','|rl|','|rv|');
@@ -330,7 +330,7 @@ methods(Access = public)
 	function print_detailed_line(o,iter,step_len,r)
 		if o.display_level == 3
 			[rz,rl,rv] = r.norms();
-% 			a1 = int32(iter);
+			a1 = int32(iter);
 			% fprintf('%10d  %10e  %10e  %10e  %10e\n',a1,step_len,rz,rl,rv);
 		end
 
@@ -343,75 +343,75 @@ methods(Access = public)
 	end
 
 	% update options
-% 	function update_options(o,opts)
-% 		if isfield(opts,'sigma')
-% 			o.sigma = opts.sigma;
-% 		end
-% 
-% 		if isfield(opts,'itol_red_factor')
-% 			o.itol_red_factor = opts.itol_red_factor;
-% 		end
-% 
-% 		if isfield(opts,'max_newton_iters')
-% 			o.max_newton_iters = opts.max_newton_iters;
-% 		end
-% 
-% 		if isfield(opts,'max_prox_iters')
-% 			o.max_prox_iters = opts.max_prox_iters;
-% 		end
-% 
-% 		if isfield(opts,'tol')
-% 			o.tol = opts.tol;
-% 		end
-% 
-% 		if isfield(opts,'rtol')
-% 			o.rtol = opts.rtol;
-% 		end
-% 
-% 		if isfield(opts,'dtol')
-% 			o.dtol = opts.dtol;
-% 		end
-% 
-% 		if isfield(opts,'inf_tol')
-% 			o.inf_tol = opts.inf_tol;
-% 		end
-% 
-% 		if isfield(opts,'check_infeasibility')
-% 			o.check_infeasibility = opts.check_infeasibility;
-% 		end
-% 
-% 		if isfield(opts,'alpha')
-% 			o.alpha = opts.alpha;
-% 		end
-% 
-% 		if isfield(opts,'beta')
-% 			o.beta = opts.beta;
-% 		end
-% 
-% 		if isfield(opts,'eta')
-% 			o.eta = opts.eta;
-% 		end
-% 
-% 		if isfield(opts,'lsmax')
-% 			o.lsmax = opts.lsmax;
-% 		end
-% 
-% 		if isfield(opts,'max_inner_iters')
-% 			o.max_inner_iters = opts.max_inner_iters;
-% 		end
-% 
-% 		if isfield(opts,'itol_max')
-% 			o.itol_max = opts.itol_max;
-% 		end
-% 
-% 		if isfield(opts,'itol_min')
-% 			o.itol_min = opts.itol_min;
-% 		end
-% 
-% 		if isfield(opts,'display_level')
-% 			o.display_level = opts.display_level;
-% 		end
-% 	end
+	function update_options(o,opts)
+		if isfield(opts,'sigma')
+			o.sigma = opts.sigma;
+		end
+
+		if isfield(opts,'itol_red_factor')
+			o.itol_red_factor = opts.itol_red_factor;
+		end
+
+		if isfield(opts,'max_newton_iters')
+			o.max_newton_iters = opts.max_newton_iters;
+		end
+
+		if isfield(opts,'max_prox_iters')
+			o.max_prox_iters = opts.max_prox_iters;
+		end
+
+		if isfield(opts,'tol')
+			o.tol = opts.tol;
+		end
+
+		if isfield(opts,'rtol')
+			o.rtol = opts.rtol;
+		end
+
+		if isfield(opts,'dtol')
+			o.dtol = opts.dtol;
+		end
+
+		if isfield(opts,'inf_tol')
+			o.inf_tol = opts.inf_tol;
+		end
+
+		if isfield(opts,'check_infeasibility')
+			o.check_infeasibility = opts.check_infeasibility;
+		end
+
+		if isfield(opts,'alpha')
+			o.alpha = opts.alpha;
+		end
+
+		if isfield(opts,'beta')
+			o.beta = opts.beta;
+		end
+
+		if isfield(opts,'eta')
+			o.eta = opts.eta;
+		end
+
+		if isfield(opts,'lsmax')
+			o.lsmax = opts.lsmax;
+		end
+
+		if isfield(opts,'max_inner_iters')
+			o.max_inner_iters = opts.max_inner_iters;
+		end
+
+		if isfield(opts,'itol_max')
+			o.itol_max = opts.itol_max;
+		end
+
+		if isfield(opts,'itol_min')
+			o.itol_min = opts.itol_min;
+		end
+
+		if isfield(opts,'display_level')
+			o.display_level = opts.display_level;
+		end
+	end
 end
 
 
