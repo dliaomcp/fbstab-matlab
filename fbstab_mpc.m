@@ -1,5 +1,5 @@
 % fbstab_mpc: Proximally Stabilized Semismooth Method for solving QPs
-% [x,out] = fbstab_mpc(x0,mpc,opts) attempts to solve the 
+% [x,u,out] = fbstab_mpc(x0,mpc,opts) attempts to solve the 
 % following quadratic programming problem:
 %
 % min.  \sum_{i=0}^N 1/2 [x(i)]' * [Q(i) S(i)'] [x(i)] + [q(i)]'*[x(i)]
