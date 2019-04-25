@@ -282,7 +282,7 @@ function [x,v,E,niters] = pfb(qp,x0,v0,xbar,vbar,sigma,tol,alpha,niters,max_iter
 	eta = 1e-8; % sufficient decrease parameter
 	lnm = 5; % recurrence length for the non-monotone linesearch
 	lsmax = 20; % maximum number of allowable linesearch iterations
-	max_iters = 100; % maximum number of Newton iterations allowed
+	max_inner_iters = 200; % maximum number of Newton iterations allowed
 	if isfield(opts,'eta')
 		eta = opts.eta;
 	end
@@ -296,7 +296,7 @@ function [x,v,E,niters] = pfb(qp,x0,v0,xbar,vbar,sigma,tol,alpha,niters,max_iter
 		lsmax = opts.lsmax;
 	end
 	if isfield(opts,'inner_iters')
-		max_iters = opts.inner_iters;
+		max_inner_iters = opts.inner_iters;
 	end
 
 	% initialization
@@ -310,7 +310,7 @@ function [x,v,E,niters] = pfb(qp,x0,v0,xbar,vbar,sigma,tol,alpha,niters,max_iter
 
 	% diagnostics
 	E = 0;
-	for j = 1:(max_iters - niters)
+	for j = 1:max_inner_iters
 		% compute RHS
 		r1 = -(qp.H*x + qp.f + qp.A'*v + sigma*(x - xbar));
 		r2 = -phi(y,v,alpha);
