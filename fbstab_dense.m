@@ -119,6 +119,9 @@ function [x,v,out] = fbstab(qp,x0,v0,opts)
 	if isfield(opts,'alpha')
 		alpha = opts.alpha;
 	end
+	if isfield(opts,'max_newton_iters')
+		max_newton_iters = opts.max_newton_iters;
+	end
 
 	sc = struct();
 	sc.pr = ones(n,1); % primal scaling
