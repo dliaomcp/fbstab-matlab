@@ -20,7 +20,7 @@ function [mpc,sys,simin] = load_hcw(N)
 
 
 	% continuous time model
-	A21 = [3*n^2,0,0;0,0,0;0,0,3*n^2];
+	A21 = [3*n^2,0,0;0,0,0;0,0,-n^2];
 	A22 = [0,2*n,0;-2*n,0,0;0,0,0];
 	Ac = [zeros(3),eye(3);A21,A22];
 	Bc = [zeros(3);eye(3)];
