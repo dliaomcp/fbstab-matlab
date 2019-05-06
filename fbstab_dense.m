@@ -338,9 +338,14 @@ function [x,v,E,niters] = pfb(qp,x0,v0,xbar,vbar,sigma,tol,alpha,niters,max_iter
 		K = Hs + (qp.A)'*B;
 		r = r1 - (qp.A)'*(r2./mus);
 
+		LT.LT = true;
+		UT.UT = true;
+
 		K = chol(K,'lower');
-		dx = K\r;
-		dx = (K')\dx;
+		% dx = K\r;
+		dx = linsolve(K,r,LT);
+		% dx = (K')\dx;
+		dx = linsolve(K',dx,UT);
 		dv = (r2 + gamma.*(qp.A*dx))./mus;
 		dy = -qp.A*dx + sigma*dv;
 
