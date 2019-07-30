@@ -72,8 +72,6 @@ function [mpc,sys,simin] = load_copoly_example(N)
 	d = [-ones(nu,1)*umax;-ones(nu,1)*umax];
 	mpc.d = repmat(d,[1,N+1]);
 
-	% form QP matrices
-	qpc = form_mpc_qp_condensed(mpc);
 
 	sys.name = 'copoly';
 	%% Simulation
