@@ -7,9 +7,8 @@
 % a class to store the MPC problem data
 % this class assumes that the primal variable is ordered as
 % x0,u0,x1,u1,... xN,uN
-classdef data_ms < handle
+classdef MpcData < handle
 
-	
 properties(Access = public)
 	N; % prediction horizon
 	nx; % state dimension
@@ -23,25 +22,25 @@ properties(Access = public)
 	Szero = false; % S = 0
 	Hdiag = false; % S = 0 and Q,R are diagonal
 
-	% cost function
+	% Cost function
 	Q; % Q0,Q1,... \in [nx,nx,N+1]
 	R; % \in [nu,nu,N+1]
 	S; % \in [nu,nx,N+1]
 	q; % \in [nx,1]
 	r; % \in [nx,1]
 
-	% dynamics
+	% Dynamics
 	Ak; % A0,A1,.. AN-1 in [nx,nx,N]
 	Bk; % \in [nx,nu,N]
 	ck; % in [nx,N]
 	xt; % in [nx,1] the state
 
-	% constraints
+	% Constraints
 	E; % \in [nc,nx,N+1]
 	L; %\in [nc,nu,N+1]
 	d; % \in [nc,N+1]
 
-	% useful vectors
+	% Useful vectors
 	f;
 	h;
 	b;
@@ -50,7 +49,7 @@ end % properties
 
 methods(Access = public)
 	% constructor
-	function s = data_ms(Q,R,S,q,r,A,B,c,xt,E,L,d)
+	function s = MpcData(Q,R,S,q,r,A,B,c,xt,E,L,d)
 		[s.nx,s.nu,s.N] = size(B);
 		[nx,nu,N] = size(B);
 		s.nc = size(E,1);
@@ -82,15 +81,10 @@ methods(Access = public)
 		s.b = -d(:);
 	end
 
-	% update state
-	% changes xt if nothing else changes
-
-	% update rhs
-	% update rhs vectors only
-
-	function [nz,nl,nv] = opt_sz(obj)
-		[nx,nu,N] = size(obj.Bk);
-		nc = size(obj.E,1);
+	function [nz,nl,nv] = ProblemSize(obj)
+		% The sizes are recomputed to help
+		% with code generation.
+		[nx,nu,nc,N] = OcpSize(obj);
 		nz = (nx+nu)*(N+1);
 		nl = nx*(N+1);
 		nv = nc*(N+1);
@@ -98,7 +92,7 @@ methods(Access = public)
 
 	% compute H*v 
 	function y = H(obj,v)
-		[nx,nu,nc,N] = sz(obj);
+		[nx,nu,nc,N] = OcpSize(obj);
 		% v must be (nx+nu)*(N+1)
 		v = reshape(v,[nx+nu,N+1]);
 		y = zeros(nx+nu,N+1);
@@ -114,7 +108,7 @@ methods(Access = public)
 
 	% compute A*v
 	function y = A(obj,v)
-		[nx,nu,nc,N] = sz(obj);
+		[nx,nu,nc,N] = OcpSize(obj);
 		y = zeros(nc,N+1);
 		v = reshape(v,[nx+nu,N+1]);
 		for i = 1:N+1
@@ -127,7 +121,7 @@ methods(Access = public)
 
 	% compute G*v 
 	function y = G(obj,v)
-		[nx,nu,nc,N] = sz(obj);
+		[nx,nu,nc,N] = OcpSize(obj);
 		y = zeros(nx,N+1);
 		v = reshape(v,[nx+nu,N+1]);
 		y(:,1) = -v(1:nx,1); % -x0
@@ -143,7 +137,7 @@ methods(Access = public)
 
 	% compute G'*v
 	function y = GT(obj,v)
-		[nx,nu,nc,N] = sz(obj);
+		[nx,nu,nc,N] = OcpSize(obj);
 		y = zeros(nx+nu,N+1);
 		v = reshape(v,[nx,N+1]);
 		for i = 1:N
@@ -158,7 +152,7 @@ methods(Access = public)
 
 	% compute A'*v
 	function y = AT(obj,v)
-		[nx,nu,nc,N] = sz(obj);
+		[nx,nu,nc,N] = OcpSize(obj);
 		y = zeros(nx+nu,N+1);
 		v = reshape(v,[nc,N+1]);
 		for i = 1:N+1
@@ -167,11 +161,9 @@ methods(Access = public)
 		y = y(:);
 	end
 	
-	function [nx,nu,nc,N] = sz(obj)
-		% nx = obj.nx;
-		% nu = obj.nu;
-		% nc = obj.nc;
-		% N = obj.N;
+	function [nx,nu,nc,N] = OcpSize(obj)
+		% The sizes are recomputed to help
+		% with code generation.
 		[nx,nu,N] = size(obj.Bk);
 		nc = size(obj.E,1);
 	end

@@ -4,43 +4,33 @@
 %
 % and is subject to the BSD-3-Clause license 
 
-
-% computes solutions of FBstab linear systems
-% using a riccati recursion
-classdef pcg_ss < handle
-
+classdef ImplicitConjugateGradient < handle
 	properties(Access = public)
-
-	ztol = 100*eps;
+	ztol = 100*eps; % zero tolerance 
 	alpha = 0.95;
+	pcg_tol = 1e-8; % relative tolerance for PCG iteration
 	data;
 	sigma;
-
 	mus;
 	gamma;
-
 	T; % preconditioner
 
 	end % properties
 
-
 	methods(Access = public)
-
-	function o = pcg_ss(data)
+	function o = ImplicitConjugateGradient(data)
 		o.data = data;
-		[nx,nu,nc,N] = data.sz();
-		[nz,~,nv] = data.opt_sz();
+		[nx,nu,nc,N] = data.OcpSize();
+		[nz,~,nv] = data.ProblemSize();
 		o.gamma = zeros(nv,1);
 		o.mus = zeros(nv,1);
-
-		% o.T = zeros(nu,nu,N+1);
 		o.T = zeros(nu,N+1);
 	end
 
-	function factor(o,x,xbar,sigma)
+	function Factor(o,x,xbar,sigma)
 		% form the augmented Hessian matrix
-		[nx,nu,nc,N] = sz(o.data);
-		[nz,nl,nv] = opt_sz(o.data);
+		[nx,nu,nc,N] = OcpSize(o.data);
+		[nz,nl,nv] = ProblemSize(o.data);
 
 		o.sigma = sigma;
 		% compute the barrier terms
@@ -53,27 +43,28 @@ classdef pcg_ss < handle
 		for i = 1:N+1
 			o.T(:,i) = diag(o.data.R(:,:,i)) + sigma;
 		end
-
 	end % factor
 
-	function solve(o,r,dx)
-		[nx,nu,nc,N] = sz(o.data);
-		[nz,nl,nv] = opt_sz(o.data);
+	function Solve(o,r,dx)
+		[nx,nu,nc,N] = OcpSize(o.data);
+		[nz,nl,nv] = ProblemSize(o.data);
 
 		% compute the reduced residual
 		r1 = r.rz - o.data.AT(r.rv./o.mus);
 
-		% implement the conjugate gradient method
-		[dx.z,res] = o.PCG(r1,1e-8,nz);
+		[dx.z,res] = o.ConjugateGradient(r1,1e-8,nz);
 
-		% recover ieq duals
+		% Recover Inequality duals
 		dx.v = (r.rv + o.gamma.*o.data.A(dx.z))./o.mus;
+
 		% dy for linesearch
 		dx.y = o.data.b - o.data.A(dx.z);
-
 	end
 
-	function [x,res] = PCG(o,b,tol,kmax)
+end % public methods
+
+methods(Access = private)
+	function [x,res] = ConjugateGradient(o,b,tol,kmax)
 		n = length(b);
 		x = zeros(n,1);
 		r = b;
@@ -105,7 +96,7 @@ classdef pcg_ss < handle
 	end
 
 	function y = invT(o,u)
-		[nx,nu,nc,N] = sz(o.data);
+		[nx,nu,nc,N] = OcpSize(o.data);
 		u = reshape(u,[nu,N+1]);
 		y = zeros(nu,N+1);
 		for i = 1:N+1
@@ -126,7 +117,7 @@ classdef pcg_ss < handle
 
 	% compute an element of the C-differential 
 	function [gamma,mu] = dphi(o,a,b,nv)
-		[~,~,q] = opt_sz(o.data);
+		[~,~,q] = ProblemSize(o.data);
 		ztol = o.ztol;
 		% computes an element from the C differential
 		r = sqrt(a.^2 + b.^2);
@@ -149,11 +140,9 @@ classdef pcg_ss < handle
 				mu(i) = o.alpha*(1- b(i)/r(i));
 			end
 		end
-		% gamma = gamma(1:q);
-		% mu = mu(1:q);
 	end% dphi
+	
+end % private methods
 
-	end % methods
 
-
-end % riccati
+end % class

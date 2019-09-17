@@ -13,9 +13,9 @@ clc
 
 alpha = 0.95;
 % create the data and linsys objects
-data = data_ms(mpc.Q,mpc.R,mpc.S,mpc.q,mpc.r,mpc.A,mpc.B,mpc.c,simin.x0,mpc.E,mpc.L,mpc.d);
+data = MpcData(mpc.Q,mpc.R,mpc.S,mpc.q,mpc.r,mpc.A,mpc.B,mpc.c,simin.x0,mpc.E,mpc.L,mpc.d);
 mpc.x0 = simin.x0;
-[nz,nl,nv] = data.opt_sz();
+[nz,nl,nv] = data.ProblemSize();
 
 opts.display_level = 2;
 
@@ -35,11 +35,6 @@ toc
 opts.linear_solver = 'ricatti';
 tic
 [xopt,out] = fbstab_mpc(x,mpc,opts);
-toc
-
-'MA57'
-tic
-[xopt,out] = fbstab_ldl_sp(x,mpc,opts);
 toc
 
 

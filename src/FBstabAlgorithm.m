@@ -4,9 +4,8 @@
 %
 % and is subject to the BSD-3-Clause license 
 
-classdef fbstab_algo < handle
-
-properties(Access = public)
+classdef FBstabAlgorithm < handle
+properties(Access = private)
 	% algorithm parameters
 	sigma = sqrt(eps);
 	max_newton_iters = 500;
@@ -34,8 +33,8 @@ properties(Access = public)
 
 	% constituent classes
 	data; % qp data object
-	linsys; % linear system object
-	feas; % feasibility checker
+	linear_solver; % linear system object
+	feas_checker; % feasibility checker
 	% residual objects
 	rk; 
 	ri;
@@ -46,26 +45,20 @@ properties(Access = public)
 	xp;
 	dx;
 
-
-	% problem size data
-	nz;
-	nv;
-	nl;
-
-end
+end % properties
 
 methods(Access = public)
-	% constructor 
-	function o = fbstab_algo(data,linsys,feas,rk,ri,xk,xi,xp,dx,opts)
+% constructor 
+	function o = FBstabAlgorithm(data,linsol,feas,rk,ri,xk,xi,xp,dx,opts)
 		if nargin < 5
 			opts = struct();
 		else
-			o.update_options(opts);
+			o.UpdateOptions(opts);
 		end
 
 		o.data = data;
-		o.linsys = linsys;
-		o.feas = feas;
+		o.linear_solver = linsol;
+		o.feas_checker = feas;
 		o.rk = rk;
 		o.ri = ri;
 
@@ -77,62 +70,51 @@ methods(Access = public)
 		% harmonize alpha
 		o.rk.alpha = o.alpha;
 		o.ri.alpha = o.alpha;
-		linsys.alpha = o.alpha;
-
-		[nz,nl,nv] = data.opt_sz();
+		linear_solver.alpha = o.alpha;
 	end
 
-	% solve the qp
-	function [x,out] = solve(o,x0)
-		% get problem sizes
-		[nz,nl,nv] = opt_sz(o.data);
+  % Solves the QP.
+	function [x,out] = Solve(o,x0)
+		[nz,nl,nv] = ProblemSize(o.data);
 
 		%% initialization *************************************
-		xk = o.xk; % initial point
-		xi = o.xi; % variable for the pfb solver
-		dx = o.dx; % change in x and newton step
-		xp = o.xp; % linesearch query point
+		xk = o.xk; % Outer loop variable
+		xi = o.xi; % Inner loop variable
+		dx = o.dx; % Workspace
+		xp = o.xp; % Workspace
 
-		xk.scopy(x0);
+		xk.StructRead(x0);
 		dx.ones();
 
-		% residual objects
-		rk = o.rk; % outer loop
-		ri = o.ri; % inner loop
-		rk.nres(xk);
-		
-		% *************************************
+		rk = o.rk; % Outer loop
+		ri = o.ri; % Inner loop
+		rk.NaturalResidual(xk);
 
-		% quality of initial guess
-		E0 = rk.norm();
+		% Get quality of the initial guess.
+		E0 = norm(rk);
 		dE = 1e6;
 
-		% initialize output struct
+		% Initialize output structure.
 		out = struct();
 		out.eflag = -1;
 		out.newton_iters = 0;
 		out.prox_iters = 0;
 		out.res = E0;
 
-		% initialize tolerance
-		itol = min(E0,o.itol_max);
-		itol = max(itol,o.itol_min);
+		% Initialize tolerance
+		itol = o.saturate(E0,o.itol_min,o.itol_max);
 
 		% initial regularization parameter
 		sigma = o.sigma;
 		
-		o.print_iter_header();
+		o.PrintIterationHeader();
 
-		% main proximal loop
+		% Begin the main proximal loop.
 		for k = 1:o.max_prox_iters
-			% termination check
-			rk.nres(xk);
+			% Termination check.
+			rk.NaturalResidual(xk);
 			Ek = rk.norm();
 
-			%% TODO, issue is that sigma parameter needs to vary
-			% a large sigma value works for z and v
-			% a small value is needed to force a reduction in l
-			% I need some kind of adaptive heuristic
 			if Ek <= o.tol + E0*o.rtol
 				out.eflag = 0;
 				break;
@@ -140,48 +122,54 @@ methods(Access = public)
 				out.eflag = -1;
 				break;
 			elseif dE <= o.dtol
-				out.eflag = -2; %
+				out.eflag = -2;
 			end
 
-			o.print_detailed_header(out.prox_iters,out.newton_iters,rk);
-			o.print_iter_line(out.prox_iters,out.newton_iters,rk,ri,itol);
-				
-			% update inner tolerance
-			itol = min(Ek,itol*o.itol_red_factor);
-			itol = max(itol,o.itol_min);
+			o.PrintDetailedHeader(out.prox_iters,out.newton_iters,rk);
+			o.PrintIterationLine(out.prox_iters,out.newton_iters,rk,ri,itol);
+			
+			% Update sigma.
+			%% TODO(dliaomcp@umich.edu)
+			% The sigma parameter needs to vary
+			% a large sigma value works for z and v
+			% a small value is needed to force a reduction in l
+			% I need some kind of adaptive heuristic
+
+			% Update inner tolerance
+			itol = o.saturate(o.itol_red_factor*itol,o.itol_min,Ek);
 
 			% Call inner solver *************************************
-			[Ei,out,flag] = o.eval_prox_pfb(sigma,itol,Ek,out);
-
+			[Ei,out,flag] = o.SolveSubproblemFBRS(sigma,itol,Ek,out);
 			if ~flag
 				break;
 			end
 
 			% dx = xi - xk	
-			dx.vcopy(xi);
-			dx.axpy(xk,-1);
-			xk.vcopy(xi);
-			% infeasibility check
+			dx.Copy(xi);
+			dx.axpy(-1,xk);
+			xk.Copy(xi);
+
+			% Feasibility Check
 			if o.check_infeasibility
-				[primal,dual] = o.feas.check_feas(dx,o.inf_tol);
+				[primal,dual] = o.feas_checker.CheckFeasibility(dx,o.inf_tol);
 				if ~primal && ~dual
 					out.eflag = -5;
-					x = dx.swrite();
-					out.res = norm(rk);
-					o.print_final(out,rk);
+					x = dx.StructWrite();
+					out.res = rk.norm();
+					o.PrintFinal(out,rk);
 					return;
 				elseif ~primal
 					out.eflag = -3;
-					x = dx.swrite();
-					out.res = norm(rk);
-					o.print_final(out,rk);
+					x = dx.StructWrite();
+					out.res = rk.norm();
+					o.PrintFinal(out,rk);
 					return;
 
 				elseif ~dual
 					out.eflag = -4;
-					x = dx.swrite();
-					out.res = norm(rk);
-					o.print_final(out,rk);
+					x = dx.StructWrite();
+					out.res = rk.norm();
+					o.PrintFinal(out,rk);
 					return;
 				end
 			end
@@ -189,14 +177,13 @@ methods(Access = public)
 		end % prox loop
 
 		% output solution
-		rk.nres(xk);
-		out.res = norm(rk);
-		x = xk.swrite();
-		o.print_final(out,rk);
-
+		rk.NaturalResidual(xk);
+		out.res = rk.norm();
+		x = xk.StructWrite();
+		o.PrintFinal(out,rk);
 	end % end solve
 
-	function [Ei,out,flag] = eval_prox_pfb(o,sigma,itol,Epen,out)
+	function [Ei,out,flag] = SolveSubproblemFBRS(o,sigma,itol,Eouter,out)
 		x = o.xi;
 		xbar = o.xk;
 		dx = o.dx;
@@ -205,72 +192,72 @@ methods(Access = public)
 		rk = o.rk;
 
 		flag = true;
-		mrec = zeros(5,1);
+		merit_buffer = zeros(5,1);
 		t = 1;
-
 		Ei = 0;
-		x.vcopy(xbar);
+
+		x.Copy(xbar);
 		for j = 1:o.max_inner_iters
-			% compute residuals
-			ri.calcres(x,xbar,sigma);
-			rk.nres(x);
-			% convergence check
+			% Convergence check.
+			ri.InnerResidual(x,xbar,sigma);
+			rk.NaturalResidual(x);
+
 			Ei = ri.norm();
-			dx.vcopy(x);
-			dx.axpy(xbar,-1);
-			if (Ei <= itol*min(1,norm(dx)) && norm(rk) < Epen)||(Ei <= o.itol_min) 
-				o.print_detailed_footer(itol,ri);
+			dx.Copy(x);
+			dx.axpy(-1,xbar);
+
+			if (Ei <= itol*min(1,norm(dx)) && norm(rk) < Eouter)||(Ei <= o.itol_min)
+				o.PrintDetailedFooter(itol,ri);
 				return
 			end
 
-			o.print_detailed_line(j,t,ri);
+			o.PrintDetailedLine(j,t,ri);
 
 			if out.newton_iters >= o.max_newton_iters
 				out.eflag = -1;
-				rk.nres(xbar);
-				out.res = norm(rk);
-				x = xbar.swrite();
-				o.print_final(out,rk);
+				rk.NaturalResidual(xbar);
+				out.res = rk.norm();
+				x = xbar.StructWrite();
+				o.PrintFinal(out,rk);
 				flag = false;
 				return
 			end
 
 			% form and factor the iteration matrix
-			o.linsys.factor(x,xbar,sigma);
+			o.linear_solver.Factor(x,xbar,sigma);
 
-			% solve the system for the rhs -ri
-			% store the result in dx
-			ri.negate();
-			o.linsys.solve(ri,dx);
+			% Solve the system for the rhs -ri and  store the result in dx.
+			ri.Negate();
+			o.linear_solver.Solve(ri,dx);
 
-			% linesearch
-			mrec = circshift(mrec,1);
-			mrec(1) = 1/2*Ei^2;
-			m0 = max(mrec);
+			% Linesearch
+			merit_buffer = circshift(merit_buffer,1);
+			merit_buffer(1) = 1/2*Ei^2;
+			m0 = max(merit_buffer);
 			t = 1;
 			for i = 1:o.lsmax
 				% compute xp = x + t*dx
-				xp.vcopy(x);
-				xp.axpy(dx,t);
-				ri.calcres(xp,xbar,sigma);
+				xp.Copy(x);
+				xp.axpy(t,dx);
+				ri.InnerResidual(xp,xbar,sigma);
 				mp = 1/2*norm(ri)^2;
 
-				if mp <= m0 - 2*t*o.eta*mrec(1)
+				if mp <= m0 - 2*t*o.eta*merit_buffer(1)
 					break;
 				else
 					t = o.beta*t;
 				end
 			end
 			% update x = x + t*dx
-			x.axpy(dx,t);
+			x.axpy(t,dx);
 			out.newton_iters = out.newton_iters+1;
 		end % pfb loop
 		% project duals onto the nonnegative orthant
-		x.dual_proj();
+		x.ProjectDuals();
 	end
 
 	% printing
-	function print_final(o,out,r)
+	function PrintFinal(o,out,r)
 		if o.display_level >= 1
 			switch out.eflag
 				case 0
@@ -287,7 +274,7 @@ methods(Access = public)
 					fprintf('????');
 			end
 
-			[rz,rl,rv] = r.norms();
+			[rz,rl,rv] = r.GetNorms();
 
 			a1 = int32(out.prox_iters);
 			a2 = int32(o.max_prox_iters);
@@ -302,22 +289,22 @@ methods(Access = public)
 		end
 	end
 
-	function print_iter_header(o)
+	function PrintIterationHeader(o)
 		if o.display_level == 2
 			fprintf('%12s %12s %12s %12s %12s %12s %12s \n','prox iter','newton iters','|rz|','|rl|','|rv|','Inner res','Inner tol');
 		end
 	end
 
-	function print_iter_line(o,prox_iters,newton_iters,rk,ri,itol)
+	function PrintIterationLine(o,prox_iters,newton_iters,rk,ri,itol)
 		if o.display_level == 2
-			[rz,rl,rv] = rk.norms();
+			[rz,rl,rv] = rk.GetNorms();
 			a1 = int32(prox_iters);
 			a2 = int32(newton_iters);
 			fprintf('%12d %12d %12.4e %12.4e %12.4e %12.4e %12.4e\n',a1,a2,rz,rl,rv,ri.norm(),itol);
 		end
 	end
 
-	function print_detailed_header(o,prox_iters, newton_iters, r)
+	function PrintDetailedHeader(o,prox_iters, newton_iters, r)
 		if o.display_level == 3
 			a1 = int32(prox_iters);
 			a2 = int32(newton_iters);
@@ -327,23 +314,23 @@ methods(Access = public)
 		end
 	end
 
-	function print_detailed_line(o,iter,step_len,r)
+	function PrintDetailedLine(o,iter,step_len,r)
 		if o.display_level == 3
-			[rz,rl,rv] = r.norms();
+			[rz,rl,rv] = r.GetNorms();
 			a1 = int32(iter);
 			fprintf('%10d  %10e  %10e  %10e  %10e\n',a1,step_len,rz,rl,rv);
 		end
 
 	end
 
-	function print_detailed_footer(o,tol,r)
+	function PrintDetailedFooter(o,tol,r)
 		if o.display_level == 3
 			fprintf('Exiting inner loop. Inner residual: %6.4e, Inner tolerance: %6.4e\n',r.norm(),tol);
 		end
 	end
 
 	% update options
-	function update_options(o,opts)
+	function UpdateOptions(o,opts)
 		if isfield(opts,'sigma')
 			o.sigma = opts.sigma;
 		end
@@ -412,7 +399,14 @@ methods(Access = public)
 			o.display_level = opts.display_level;
 		end
 	end
+end % methods
+
+methods(Access = private)
+	% Projects x onto [a,b]
+	function y = saturate(o,x,a,b)
+		y = min(x,b);
+		y = max(y,a);
+	end
 end
 
-
-end
+end % classdef

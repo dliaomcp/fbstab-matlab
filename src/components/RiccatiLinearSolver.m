@@ -7,14 +7,12 @@
 
 % computes solutions of FBstab linear systems
 % using a riccati recursion
-classdef ricatti < handle
-
+classdef RiccatiLinearSolver < handle
 	properties(Access = public)
-
 	ztol = 100*eps;
 	alpha = 0.95;
 	data;
-	sigma;
+	sigma = sqrt(eps);
 
 	mus;
 	gamma;
@@ -28,15 +26,13 @@ classdef ricatti < handle
 
 	h;
 	theta;
-
 	end % properties
-
 
 	methods(Access = public)
 
-	function o = ricatti(data)
+	function o = RiccatiLinearSolver(data)
 		o.data = data;
-		[nx,nu,nc,N] = data.sz();
+		[nx,nu,nc,N] = data.OcpSize();
 
 		o.P = zeros(nx,nu,N+1);
 		o.Sigma = zeros(nu,nu,N+1);
@@ -49,26 +45,24 @@ classdef ricatti < handle
 		o.theta = zeros(nx,N+1);
 	end
 
-	function factor(o,x,xbar,sigma)
-		% form the augmented Hessian matrix
-		[nx,nu,nc,N] = sz(o.data);
-		[nz,nl,nv] = opt_sz(o.data);
-
+	function Factor(o,x,xbar,sigma)
+		[nx,nu,nc,N] = OcpSize(o.data);
+		[nz,nl,nv] = ProblemSize(o.data);
 		o.sigma = sigma;
-		% compute the barrier terms
+
+		% Compute the barrier terms
 		ys = x.y + sigma*(x.v - xbar.v);
 		[gamma,mu] = o.dphi(ys,x.v);
 		mus = sigma*gamma + mu;
 		o.mus = mus;
 		o.gamma = gamma;
 
-		% form the augmented Hessian
+		% Form the augmented Hessian
 		Q = o.data.Q;
 		R = o.data.R;
 		S = o.data.S;
 		B = gamma./mus;
 		for i = 1:N+1
-			% compute the barrier terms
 			Q(:,:,i) = Q(:,:,i) + sigma*eye(nx);
 			R(:,:,i) = R(:,:,i) + sigma*eye(nu);
 
@@ -82,45 +76,45 @@ classdef ricatti < handle
 			o.data.L(:,:,i)' * o.diagmult(o.data.E(:,:,i),B(1+(i-1)*nc:i*nc));
 		end
 
-		% temp variables
+		% Temp variables
 		Linv = zeros(nx,nx);
 
-		% Begin the riccati recursion
+		% Begin the Riccati recursion
 		% base case Pi = sigma I, L = chol(Pi)
 		o.L(:,:,1) = sqrt(sigma)*eye(nx);
 		for i = 1:N
-			% get the inverse factorization
+			% Get the inverse factorization
 			Linv = o.L(:,:,i)\eye(nx);
 
-			% compute QQ = Q + inv(Pi) and factor
+			% Compute QQ = Q + inv(Pi) and factor
 			o.M(:,:,i) = Q(:,:,i) + Linv'*Linv;
 			o.M(:,:,i) = chol(o.M(:,:,i),'lower');
 
-			% compute AM = A*inv(M)' and SM = S*inv(M)'
+			% Compute AM = A*inv(M)' and SM = S*inv(M)'
 			o.AM(:,:,i) = o.data.Ak(:,:,i)/(o.M(:,:,i)');
 			o.SM(:,:,i) = S(:,:,i)/(o.M(:,:,i)');
 
-			% compute Sigma = chol(R - S*inv(QQ)*S')
+			% Compute Sigma = chol(R - S*inv(QQ)*S')
 			o.Sigma(:,:,i) = ...
 			R(:,:,i) - o.SM(:,:,i)*o.SM(:,:,i)';
 			o.Sigma(:,:,i) = chol(o.Sigma(:,:,i),'lower');
 
-			% compute P = (A*inv(QQ)*S' - B)* inv(Sigma)';
+			% Compute P = (A*inv(QQ)*S' - B)* inv(Sigma)';
 			o.P(:,:,i) = o.AM(:,:,i)*o.SM(:,:,i)' - o.data.Bk(:,:,i);
 			o.P(:,:,i) = o.P(:,:,i)/(o.Sigma(:,:,i)');
 
-			% compute Pi k+1
+			% Compute Pi k+1
 			o.L(:,:,i+1) = o.P(:,:,i)*o.P(:,:,i)' + ...
 			o.AM(:,:,i)*o.AM(:,:,i)' + sigma*eye(nx);
 
-			% compute a cholesky factorization of Pi k+1
+			% Compute a cholesky factorization of Pi k+1
 			o.L(:,:,i+1) = chol(o.L(:,:,i+1),'lower');
 
 		end
 
-		% finish the recursion
+		% Finish the recursion
 		Linv = o.L(:,:,N+1)\eye(nx);
-		% compute QQ = Q + inv(Pi) and factor
+		% Compute QQ = Q + inv(Pi) and factor
 		o.M(:,:,N+1) = Q(:,:,N+1) + Linv'*Linv;
 		o.M(:,:,N+1) = chol(o.M(:,:,N+1),'lower');
 
@@ -132,9 +126,9 @@ classdef ricatti < handle
 
 	end % factor
 
-	function solve(o,r,dx)
-		[nx,nu,nc,N] = sz(o.data);
-		[nz,nl,nv] = opt_sz(o.data);
+	function Solve(o,r,dx)
+		[nx,nu,nc,N] = OcpSize(o.data);
+		[nz,nl,nv] = ProblemSize(o.data);
 
 		% compute the reduced residuals
 		r1 = r.rz - o.data.AT(r.rv./o.mus);
@@ -231,7 +225,7 @@ classdef ricatti < handle
 	
 	% compute an element of the C-differential 
 	function [gamma,mu] = dphi(o,a,b,nv)
-		[~,~,q] = opt_sz(o.data);
+		[~,~,q] = ProblemSize(o.data);
 		ztol = o.ztol;
 		% computes an element from the C differential
 		r = sqrt(a.^2 + b.^2);

@@ -9,17 +9,19 @@ close all
 clc
 
 
-[mpc,qpc,qp,sys,simin] = load_servo(30);
+[mpc,sys,simin] = load_servo_example(30);
 
-nz = (mpc.nx+mpc.nu)*(mpc.N+1);
-nl = mpc.nx*(mpc.N+1);
-nv = mpc.nc*(mpc.N+1);
+[nx,nu,N] = size(mpc.B);
+nc = size(mpc.E,1);
+
+nz = (nx+nu)*(N+1);
+nl = nx*(N+1);
+nv = nc*(N+1);
 
 % create initial conditions
 x.v = zeros(nv,1);
 x.l = zeros(nl,1);
 x.z = zeros(nz,1);
-
 
 % options
 opts.display_level = 2;

@@ -116,66 +116,60 @@ function [x,u,out] = fbstab_mpc(x0,mpc,opts)
 	if isfield(opts,'linear_solver')
 		algo = opts.linear_solver;
 	end
-
+	
 	switch algo
-		case 'ric'
-			[x,out] = fbstab_ricatti(x0,mpc,opts);
 		case 'pcg'
 			[x,out] = fbstab_pcg(x0,mpc,opts);
-		case 'ldl'
-			[x,out] = fbstab_ldl(x0,mpc,opts);
 		otherwise
-			[x,out] = fbstab_ricatti(x0,mpc,opts);
+			[x,out] = fbstab_riccati(x0,mpc,opts);
 	end
 	[nx,nu] = size(mpc.B(:,:,1));
 	u = x.z(nx+1:nx+nu);
-
 end
 
-
-function [x,out] = fbstab_ricatti(x0,mpc,opts)
-
-	data = data_ms(mpc.Q,mpc.R,mpc.S,mpc.q,mpc.r,mpc.A,...
+function [x,out] = fbstab_riccati(x0,mpc,opts)
+	data = MpcData(mpc.Q,mpc.R,mpc.S,mpc.q,mpc.r,mpc.A,...
 		mpc.B,mpc.c,mpc.x0,mpc.E,mpc.L,mpc.d);
 
-	linsys = ricatti(data);
-	feas = feas_ms(data);
-	r1 = res_ms(data);
-	r2 = res_ms(data);
+	linsys = RiccatiLinearSolver(data);
+	feas = FullFeasibility(data);
+	r1 = FullResidual(data);
+	r2 = FullResidual(data);
 
-	x1 = var_ms(data);
-	x2 = var_ms(data);
-	x3 = var_ms(data);
-	x4 = var_ms(data);
+	x1 = FullVariable(data);
+	x2 = FullVariable(data);
+	x3 = FullVariable(data);
+	x4 = FullVariable(data);
+
 	% solver object
-	fbstab = fbstab_algo(data,linsys,feas,r1,r2,x1,x2,x3,x4,opts);
+	fbstab = FBstabAlgorithm(data,linsys,feas,r1,r2,x1,x2,x3,x4,opts);
 
-	[x,out] = fbstab.solve(x0);
+	[x,out] = fbstab.Solve(x0);
 end
 
 
 function [x,out] = fbstab_pcg(x0,mpc,opts)
 	% create QP data structure
-	data = data_ss(mpc.Q,mpc.R,mpc.S,mpc.q,mpc.r,mpc.A,...
+	data = CondensedMpcData(mpc.Q,mpc.R,mpc.S,mpc.q,mpc.r,mpc.A,...
 		mpc.B,mpc.c,mpc.x0,mpc.E,mpc.L,mpc.d);
 
 	% get sizes
-	[nx,nu,nc,N] = data.sz();
+	[nx,nu,nc,N] = data.OcpSize();
 
 	% components objects
-	linsys = pcg_ss(data);
-	feas = feas_ss(data);
+	linsys = ImplicitConjugateGradient(data);
+	feas = CondensedFeasibility(data);
 
-	r1 = res_ss(data);
-	r2 = res_ss(data);
+	r1 = CondensedResidual(data);
+	r2 = CondensedResidual(data);
 
-	x1 = var_ss(data);
-	x2 = var_ss(data);
-	x3 = var_ss(data);
-	x4 = var_ss(data);
+	x1 = CondensedVariable(data);
+	x2 = CondensedVariable(data);
+	x3 = CondensedVariable(data);
+	x4 = CondensedVariable(data);
 
 	% solver object
-	fbstab = fbstab_algo(data,linsys,feas,r1,r2,x1,x2,x3,x4,opts);
+	fbstab = FBstabAlgorithm(data,linsys,feas,r1,r2,x1,x2,x3,x4,opts);
 
 	% extract the controls
 	z = reshape(x0.z,[nx+nu,N+1]);
@@ -188,7 +182,8 @@ function [x,out] = fbstab_pcg(x0,mpc,opts)
 	y0.z = u(:);
 
 	% call the solver
-	[y,out] = fbstab.solve(y0);
+	[y,out] = fbstab.Solve(y0);
+	
 	u = y.z;
 	uu = reshape(u,[nu,N+1]);
 
@@ -209,7 +204,7 @@ end
 
 % recover the states after solving the condensed problem
 function x = recover_states(u,data)
-	[nx,nu,nc,N] = data.sz();
+	[nx,nu,nc,N] = data.OcpSize();
 
 	x = zeros(nx,N+1);
 	x(:,1) = data.xt;
@@ -222,7 +217,7 @@ end
 % recover the co-states (eq duals)
 % after solving the condensed problems
 function l = recover_costates(z,v,data)
-	[nx,nu,nc,N] = data.sz();
+	[nx,nu,nc,N] = data.OcpSize();
 
 	% compute the lagrangian of the multiple shooting problem
 	pp = -(data.f_ms() + data.H_ms(z) + data.AT_ms(v));
@@ -235,26 +230,4 @@ function l = recover_costates(z,v,data)
 		l(:,i) = data.Ak(:,:,i)'*l(:,i+1) - p(1:nx,i);
 	end
 	l = l(:);
-end
-
-function [x,out] = fbstab_ldl(x0,mpc,opts)
-
-	data = data_ms(mpc.Q,mpc.R,mpc.S,mpc.q,mpc.r,mpc.A,...
-		mpc.B,mpc.c,mpc.x0,mpc.E,mpc.L,mpc.d);
-
-	linsys = ldlt_ms(data);
-	feas = feas_ms(data);
-	r1 = res_ms(data);
-	r2 = res_ms(data);
-
-	x1 = var_ms(data);
-	x2 = var_ms(data);
-	x3 = var_ms(data);
-	x4 = var_ms(data);
-	% solver object
-	fbstab = fbstab_algo(data,linsys,feas,r1,r2,x1,x2,x3,x4,opts);
-
-	% call the solver
-	[x,out] = fbstab.solve(x0);
-
 end

@@ -5,30 +5,26 @@
 % and is subject to the BSD-3-Clause license 
 
 
-% performs infeasibility checking for multiple shooting QPs
-classdef feas_ss < handle
+% Performs feasibility checking for QPs with equality constraints
+classdef CondensedFeasibility < handle
 
- properties(Access = public)
+ properties(Access = private)
  	z1;
  	v1;
-
  	data;
  end
 
 
  methods(Access = public)
-
- 	function o = feas_ss(data)
+ 	function o = CondensedFeasibility(data)
  		o.data = data;
-
- 		[nz,nl,nv] = data.opt_sz();
+ 		[nz,~,nv] = data.ProblemSize();
  		o.z1 = zeros(nz,1);
  		o.v1 = zeros(nv,1);
-
  	end
 
- 	function [primal,dual] = check_feas(o,x,tol)
- 		[nz,nl,nv] = o.data.opt_sz();
+ 	function [primal,dual] = CheckFeasibility(o,x,tol)
+ 		[nz,nl,nv] = o.data.ProblemSize();
  		primal = true;
  		dual = true;
 
