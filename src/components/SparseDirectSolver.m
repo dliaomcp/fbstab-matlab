@@ -18,7 +18,13 @@ classdef SparseDirectSolver < handle
 
     data; % problem data
     p_amd; % permutation from a minimum degree ordering
+
+    gamma;
+    mus;
+
     ldl_piv_tol = 0.001;
+    ztol = 100*eps;
+    alpha = 0.95;
 
   end % public properties
 
@@ -42,7 +48,6 @@ classdef SparseDirectSolver < handle
 
     function Factor(o,x,xbar,sigma)
       [nz,nl,nv] = ProblemSize(o.data);
-      o.sigma = sigma;
 
       % Compute the barrier terms
       ys = x.y + sigma*(x.v - xbar.v);
@@ -58,12 +63,11 @@ classdef SparseDirectSolver < handle
       % [E  G']
       % [G -sI]
 
-      E = o.data.H + sigma*speye(nz) + o.data.A'*Gamma*o.data.A;
-      o.K = [E,o.data.G';o.data.G,-sigma*speye(nl)];
-
+      E = o.data.H_ + sigma*speye(nz) + o.data.A_'*Gamma*o.data.A_;
+      K = [E,o.data.G_';o.data.G_,-sigma*speye(nl)];
       % TODO(dliaomcp@umich.edu) Apply matrix reordering here
       % if helpful.
-      [o.U,o.D,o.p] = ldl(o.K,o.ldl_piv_tol,'upper','vector');
+      [o.U,o.D,o.p] = ldl(K,o.ldl_piv_tol,'upper','vector');
     end
 
     function Solve(o,r,dx)
@@ -75,9 +79,8 @@ classdef SparseDirectSolver < handle
       rhs(nz+1:end) = -r.rl;
 
       % Solve the system.
-      x(o.p) = o.U\(o.D\(o.U'\(b(o.p))));
-
-      norm(o.K*x - b)
+      x = zeros(nz+nl,1);
+      x(o.p) = o.U\(o.D\(o.U'\(rhs(o.p))));
 
       dx.z = x(1:nz);
       dx.l = x(nz+1:end);
