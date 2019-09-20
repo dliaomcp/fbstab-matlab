@@ -8,13 +8,24 @@
 % using direct sprase linear solvers.
 classdef SparseDirectSolver < handle
   properties(Access = public)
+    ldl_piv_tol = 0.001;
+    ztol = 100*eps;
+    alpha = 0.95;
 
-    % The outputs from MATLABs ldl function
+    % Pick the solver mode
+    solver_mode = 3;
+
+  end % public properties
+
+  properties(Access = private)
+    % Workspaces for storing matrix factorizations
+    L; % lower triangular factor
     U; % upper triangular factor
     D; % block diagonal portion
-    p; % permutation vector
     S; % scaling vector
-    K;
+   
+    p; % row permutation vector
+    q; % column permutation vector
 
     data; % problem data
     p_amd; % permutation from a minimum degree ordering
@@ -22,11 +33,8 @@ classdef SparseDirectSolver < handle
     gamma;
     mus;
 
-    ldl_piv_tol = 0.001;
-    ztol = 100*eps;
-    alpha = 0.95;
-
-  end % public properties
+    sigma;
+  end
 
   methods(Access = public)
 
@@ -49,28 +57,93 @@ classdef SparseDirectSolver < handle
     function Factor(o,x,xbar,sigma)
       [nz,nl,nv] = ProblemSize(o.data);
 
+      o.sigma = sigma;
       % Compute the barrier terms
       ys = x.y + sigma*(x.v - xbar.v);
       [o.gamma,mu] = o.dphi(ys,x.v);
       o.mus = sigma*o.gamma + mu;
 
       Gamma = o.gamma./o.mus;
-      Gamma = spdiags(Gamma,0,nv,nv); % make it a sparse diagonal matrix
 
-      % TODO(dliaomcp@umich.edu) Add switch for matrix structure here.
-
-      % Build the sparse matrix
-      % [E  G']
-      % [G -sI]
-
-      E = o.data.H_ + sigma*speye(nz) + o.data.A_'*Gamma*o.data.A_;
-      K = [E,o.data.G_';o.data.G_,-sigma*speye(nl)];
-      % TODO(dliaomcp@umich.edu) Apply matrix reordering here
-      % if helpful.
-      [o.U,o.D,o.p] = ldl(K,o.ldl_piv_tol,'upper','vector');
+      switch o.solver_mode
+      case 1
+        o.Mode1Factor(o.gamma,o.mus,sigma);
+      case 2
+        o.Mode2Factor(Gamma,sigma);
+      case 3
+        o.Mode3Factor(Gamma,sigma);
+      otherwise
+        o.Mode2Factor(Gamma,sigma);
+      end
+     
     end
 
     function Solve(o,r,dx)
+      switch o.solver_mode
+      case 1
+        o.Mode1Solve(r,dx);
+      case 2
+        o.Mode2Solve(r,dx);
+      case 3
+        o.Mode3Solve(r,dx);
+      otherwise
+        o.Mode2Factor(r,dx);
+      end
+    end
+
+  end % public methods
+
+  methods(Access = private)
+
+    function Mode1Factor(o,gamma,mus,sigma)
+      % Factor the sparse matrix
+      % [Hs  G' A']
+      % [-G  S  0 ]
+      % [-CA 0  D ]
+      [nz,nl,nv] = ProblemSize(o.data);
+
+      Hs = o.data.H_ + sigma*speye(nz);
+      C = spdiags(gamma,0,nv,nv);
+      D = spdiags(mus,0,nv,nv);
+      K = [Hs,o.data.G_',o.data.A_';
+      -o.data.G_,sigma*speye(nl),sparse(nl,nv);
+      -C*o.data.A_,sparse(nv,nl),D];
+
+      % TODO(dliaomcp@umich.edu) Add preordering here using AMD or something
+      [o.L,o.U,o.p,o.q,o.S] = lu(K,'vector');
+    end
+
+    function Mode1Solve(o,r,dx)
+      [nz,nl,nv] = ProblemSize(o.data);
+
+      rhs = [r.rz;r.rl;r.rv];
+      x = zeros(nz+nl+nv,1);
+
+      rhs = o.S\rhs;
+      x(o.q) = o.U\(o.L\rhs(o.p));
+
+      dx.z = x(1:nz);
+      dx.l = x(nz+1:nz+nl);
+      dx.v = x(nz+nl+1:end);
+      dx.y = o.data.b - o.data.A(dx.z);
+
+    end
+
+    function Mode2Factor(o,Gamma,sigma)
+      [nz,nl,nv] = ProblemSize(o.data);
+      % Factor the sparse matrix
+      % [E  G']
+      % [G -sI]
+     
+      Gamma = spdiags(Gamma,0,nv,nv); % make it a sparse diagonal matrix
+      E = o.data.H_ + sigma*speye(nz) + o.data.A_'*Gamma*o.data.A_;
+      K = [E,o.data.G_';o.data.G_,-sigma*speye(nl)];
+
+      % TODO(dliaomcp@umich.edu) Apply matrix reordering here?
+      [o.U,o.D,o.p,o.S] = ldl(K,o.ldl_piv_tol,'upper','vector');
+    end
+
+    function Mode2Solve(o,r,dx)
       [nz,nl,nv] = ProblemSize(o.data);
 
       % Compute the reduced residuals.
@@ -79,8 +152,10 @@ classdef SparseDirectSolver < handle
       rhs(nz+1:end) = -r.rl;
 
       % Solve the system.
+      rhs = o.S*rhs;
       x = zeros(nz+nl,1);
       x(o.p) = o.U\(o.D\(o.U'\(rhs(o.p))));
+      x = o.S*x;
 
       dx.z = x(1:nz);
       dx.l = x(nz+1:end);
@@ -91,9 +166,36 @@ classdef SparseDirectSolver < handle
       dx.y = o.data.b - o.data.A(dx.z);
     end
 
-  end % public methods
 
-  methods(Access = private)
+    function Mode3Factor(o,Gamma,sigma)
+      [nz,nl,nv] = ProblemSize(o.data);
+
+      Gamma = spdiags(Gamma,0,nv,nv); % make it a sparse diagonal matrix
+      B = o.data.H_ + sigma*speye(nz) + ...
+      o.data.A_'*Gamma*o.data.A_ + o.data.G_'*o.data.G_/sigma;
+
+      % TODO(dliaomcp@umich.edu) Apply matrix reordering here?
+      [o.U,~,o.p] = chol(B,'vector');
+    end
+
+    function Mode3Solve(o,r,dx)
+      [nz,nl,nv] = ProblemSize(o.data);
+
+      % Compute the reduced residuals.
+      rhs = zeros(nz,1);
+      rhs = r.rz - o.data.AT(r.rv./o.mus) - o.data.GT(r.rl/o.sigma);
+
+      % Solve.
+      dx.z = zeros(nz,1);
+      dx.z(o.p) = o.U\(o.U'\(rhs(o.p)));
+
+      % Recover dual step directions.
+      dx.l = 1/o.sigma*(r.rl + o.data.G(dx.z));
+      dx.v = (r.rv + o.gamma.*o.data.A(dx.z))./o.mus; 
+      % dy for linesearch
+      dx.y = o.data.b - o.data.A(dx.z);
+    end
+
     % compute an element of the C-differential 
     function [gamma,mu] = dphi(o,a,b,nv)
       [~,~,q] = ProblemSize(o.data);
