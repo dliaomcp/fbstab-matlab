@@ -13,7 +13,8 @@ classdef SparseDirectSolver < handle
     alpha = 0.95;
 
     % Pick the solver mode
-    solver_mode = 3;
+    solver_mode = 2;
+    use_ordering = true;
 
   end % public properties
 
@@ -38,21 +39,37 @@ classdef SparseDirectSolver < handle
 
   methods(Access = public)
 
-    function o = SparseDirectSolver(data)
-      o.data = data;
+    function o = SparseDirectSolver(data,opts)
+      if nargin < 2
+        opts = struct();
+      end
 
-      % TODO(dliaomcp@umich.edu)
+      if isfield(opts,'solver_mode')
+        o.solver_mode = opts.solver_mode;
+      end
+
+      if isfield(opts,'use_ordering')
+        o.use_ordering = opts.use_ordering;
+      end
+
+      o.data = data;
+      [nz,nl,nv] = ProblemSize(o.data);
+
       % Perform a structural analysis to compute
-      % a minimum degree ordering before factorization?
-      % https://www.mathworks.com/help/matlab/math/sparse-matrix-reordering.html
+      % a minimum degree ordering before factorization
+      % TODO(dliaomcp@umich.edu) Add for mode 1
+      if(o.solver_mode == 3 && o.use_ordering)
+        K = o.data.H_ + speye(nz) + ...
+        o.data.A_'*o.data.A_ + o.data.G_'*o.data.G_;
+        o.p_amd = amd(K);
+      elseif(o.solver_mode == 2 && o.use_ordering)
+        E = o.data.H_ + speye(nz) + o.data.A_'*o.data.A_;
+        K = [E,o.data.G_';o.data.G_,-speye(nl)];
+        o.p_amd = amd(K);
+      else
+        o.p_amd = 1:nv;
+      end
     end
-    
-    % function PerformStructuralAnalysis(o)
-    %   % TODO(dliaomcp@umich.edu)
-    %   % Perform a structural analysis to decide if
-    %   % the inequality blocks should be eliminated?
-    %   % Decide based on predicted fill in.
-    % end
 
     function Factor(o,x,xbar,sigma)
       [nz,nl,nv] = ProblemSize(o.data);
@@ -94,7 +111,6 @@ classdef SparseDirectSolver < handle
   end % public methods
 
   methods(Access = private)
-
     function Mode1Factor(o,gamma,mus,sigma)
       % Factor the sparse matrix
       % [Hs  G' A']
@@ -139,8 +155,8 @@ classdef SparseDirectSolver < handle
       E = o.data.H_ + sigma*speye(nz) + o.data.A_'*Gamma*o.data.A_;
       K = [E,o.data.G_';o.data.G_,-sigma*speye(nl)];
 
-      % TODO(dliaomcp@umich.edu) Apply matrix reordering here?
-      [o.U,o.D,o.p,o.S] = ldl(K,o.ldl_piv_tol,'upper','vector');
+      [o.U,o.D,o.p,o.S] = ...
+      ldl(K(o.p_amd,o.p_amd),o.ldl_piv_tol,'upper','vector');
     end
 
     function Mode2Solve(o,r,dx)
@@ -151,11 +167,16 @@ classdef SparseDirectSolver < handle
       rhs(1:nz) = r.rz - o.data.AT(r.rv./o.mus);
       rhs(nz+1:end) = -r.rl;
 
+      rhs = rhs(o.p_amd);
       % Solve the system.
       rhs = o.S*rhs;
       x = zeros(nz+nl,1);
       x(o.p) = o.U\(o.D\(o.U'\(rhs(o.p))));
       x = o.S*x;
+
+      % Invert the AMD permutation
+      pinv(o.p_amd) = 1:length(o.p_amd);
+      x = x(pinv);
 
       dx.z = x(1:nz);
       dx.l = x(nz+1:end);
@@ -174,8 +195,7 @@ classdef SparseDirectSolver < handle
       B = o.data.H_ + sigma*speye(nz) + ...
       o.data.A_'*Gamma*o.data.A_ + o.data.G_'*o.data.G_/sigma;
 
-      % TODO(dliaomcp@umich.edu) Apply matrix reordering here?
-      [o.U,~,o.p] = chol(B,'vector');
+      [o.U,~,o.p] = chol(B(o.p_amd,o.p_amd),'vector');
     end
 
     function Mode3Solve(o,r,dx)
@@ -184,10 +204,14 @@ classdef SparseDirectSolver < handle
       % Compute the reduced residuals.
       rhs = zeros(nz,1);
       rhs = r.rz - o.data.AT(r.rv./o.mus) - o.data.GT(r.rl/o.sigma);
-
+      rhs = rhs(o.p_amd);
       % Solve.
       dx.z = zeros(nz,1);
       dx.z(o.p) = o.U\(o.U'\(rhs(o.p)));
+
+      % Invert the AMD permutation
+      pinv(o.p_amd) = 1:length(o.p_amd);
+      dx.z = dx.z(pinv);
 
       % Recover dual step directions.
       dx.l = 1/o.sigma*(r.rl + o.data.G(dx.z));

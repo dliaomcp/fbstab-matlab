@@ -25,7 +25,6 @@
 %   A: q x n Sparse matrix
 %   b: q x 1
 % 
-%
 % Outputs:
 % x: Structure with the following fields
 %   z: primal solution
@@ -75,7 +74,7 @@ function [x,out] = fbstab_sparse(x0,qp,opts)
   x0.v = x0.v(idx);
 
   data = SparseData(qp.H,qp.G,qp.A(idx,:),qp.f,qp.h,qp.b(idx));
-  linsys = SparseDirectSolver(data);
+  linsys = SparseDirectSolver(data,opts);
   feas = FullFeasibility(data);
   r1 = FullResidual(data);
   r2 = FullResidual(data);

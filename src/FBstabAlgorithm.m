@@ -7,7 +7,9 @@
 classdef FBstabAlgorithm < handle
 properties(Access = private)
 	% algorithm parameters
-	sigma = sqrt(eps);
+	sigma = 1000*sqrt(eps);
+	sigma_max = eps^(1/4);
+	sigma_min = 1e-8;
 	max_newton_iters = 500;
 	max_prox_iters = 100;
 	tol = 1e-6;
@@ -16,13 +18,14 @@ properties(Access = private)
 	inf_tol = 1e-8;
 	check_infeasibility = true;
 	alpha = 0.95;
-	beta = 0.7;
+	beta = 0.9;
 	eta = 1e-8;
-	lsmax = 20;
-	max_inner_iters = 100;
+	lsmax = 30;
+	max_inner_iters = 50;
 	itol_max = 1e-1;
-	itol_min = 10*eps;
+	itol_min = 1e-12;
 	itol_red_factor = 1/5;
+	use_nonmonotone_linesearch = false;
 
 	% display settings
 	% 0 = none
@@ -46,6 +49,16 @@ properties(Access = private)
 	dx;
 
 end % properties
+
+properties(Access = private)
+	fnorm;
+	hnorm;
+	bnorm;
+
+	ztol = 0;
+	ltol = 0;
+	vtol = 0;
+end
 
 methods(Access = public)
 % constructor 
@@ -71,6 +84,10 @@ methods(Access = public)
 		o.rk.alpha = o.alpha;
 		o.ri.alpha = o.alpha;
 		linear_solver.alpha = o.alpha;
+
+		o.fnorm = norm(o.data.f,'inf');
+		o.hnorm = norm(o.data.h,'inf');
+		o.bnorm = norm(o.data.b,'inf');
 	end
 
   % Solves the QP.
@@ -115,7 +132,10 @@ methods(Access = public)
 			rk.NaturalResidual(xk);
 			Ek = rk.norm();
 
-			if Ek <= o.tol + E0*o.rtol
+			tol = o.GetTolerances(xk);
+			[rz,rl,rv] = rk.GetNorms();
+			if rz <= tol.z && rl <= tol.l && rv <= tol.v
+			% if Ek <= o.tol + E0*o.rtol
 				out.eflag = 0;
 				break;
 			elseif out.newton_iters > o.max_newton_iters
@@ -125,22 +145,32 @@ methods(Access = public)
 				out.eflag = -2;
 			end
 
-			o.PrintDetailedHeader(out.prox_iters,out.newton_iters,rk);
-			o.PrintIterationLine(out.prox_iters,out.newton_iters,rk,ri,itol);
+			o.PrintDetailedHeader(out.prox_iters,out.newton_iters,rk,sigma);
+			o.PrintIterationLine(out.prox_iters,out.newton_iters,rk,ri,itol,sigma);
 			
-			% Update sigma.
-			%% TODO(dliaomcp@umich.edu)
-			% The sigma parameter needs to vary
-			% a large sigma value works for z and v
-			% a small value is needed to force a reduction in l
-			% I need some kind of adaptive heuristic
-
-			% Update inner tolerance
-			itol = o.saturate(o.itol_red_factor*itol,o.itol_min,Ek);
-
+			
 			% Call inner solver *************************************
-			[Ei,out,flag] = o.SolveSubproblemFBRS(sigma,itol,Ek,out);
-			if ~flag
+			[Ei,Ek,out,flag] = o.SolveSubproblemFBRS(sigma,itol,Ek,out);
+
+			% Reduce sigma if the iteration is deemed to have stalled or is successfull.
+			if(flag == 2)
+				sigma = max(sigma/10,o.sigma_min);
+			elseif(flag == 1) 
+				sigma = max(sigma/10,o.sigma_min);
+			end
+
+			% Reset sigma after an iteration timeout.
+			% This indicates that the inner solver failed.
+			if(flag == 3)
+				sigma = o.sigma;
+			end
+			
+			% Update inner tolerance
+			if(flag == 1 || flag == 2)
+				itol = o.saturate(o.itol_red_factor*itol,o.itol_min,Ek);
+			end
+
+			if(flag == -1)
 				break;
 			end
 
@@ -183,7 +213,7 @@ methods(Access = public)
 		o.PrintFinal(out,rk);
 	end % end solve
 
-	function [Ei,out,flag] = SolveSubproblemFBRS(o,sigma,itol,Eouter,out)
+	function [Ei,Ek,out,flag] = SolveSubproblemFBRS(o,sigma,itol,Eouter,out)
 		x = o.xi;
 		xbar = o.xk;
 		dx = o.dx;
@@ -191,7 +221,13 @@ methods(Access = public)
 		ri = o.ri;
 		rk = o.rk;
 
-		flag = true;
+		% Different modes:
+		% 1: Everything OK -> reduce tolerances
+		% 2: Stall, subproblem solved but no progress is made -> reduce sigma
+		% 3: Out of iterations: don't reduce itol
+		% 4: itol_min hit -> usually happens during infeasibility detection
+		% -1: Out of newton iterations
+		flag = 1;
 		merit_buffer = zeros(5,1);
 		t = 1;
 		Ei = 0;
@@ -203,12 +239,26 @@ methods(Access = public)
 			rk.NaturalResidual(x);
 
 			Ei = ri.norm();
+			Ek = rk.norm();
 			dx.Copy(x);
 			dx.axpy(-1,xbar);
 
-			if (Ei <= itol*min(1,norm(dx)) && norm(rk) < Eouter)||(Ei <= o.itol_min)
+			if (Ei <= itol*min(1,norm(dx)) && norm(rk) >= Eouter)
+				flag = 2;
 				o.PrintDetailedFooter(itol,ri);
-				return
+				return;
+			elseif (Ei <= itol*min(1,norm(dx)) && norm(rk) <= Eouter)
+				flag = 1;
+				o.PrintDetailedFooter(itol,ri);
+				return;
+			elseif (Ei <= o.itol_min && norm(rk) >= Eouter)
+				o.PrintDetailedFooter(itol,ri);
+				flag = 2;
+				return;
+			elseif (Ei <= o.itol_min)
+				o.PrintDetailedFooter(itol,ri);
+				flag = 4;
+				return;
 			end
 
 			o.PrintDetailedLine(j,t,ri);
@@ -219,7 +269,7 @@ methods(Access = public)
 				out.res = rk.norm();
 				x = xbar.StructWrite();
 				o.PrintFinal(out,rk);
-				flag = false;
+				flag = -1;
 				return
 			end
 
@@ -233,7 +283,12 @@ methods(Access = public)
 			% Linesearch
 			merit_buffer = circshift(merit_buffer,1);
 			merit_buffer(1) = 1/2*Ei^2;
-			m0 = max(merit_buffer);
+			if(o.use_nonmonotone_linesearch)
+				m0 = max(merit_buffer);
+			else
+				m0 = merit_buffer(1);
+			end
+
 			t = 1;
 			for i = 1:o.lsmax
 				% compute xp = x + t*dx
@@ -241,7 +296,6 @@ methods(Access = public)
 				xp.axpy(t,dx);
 				ri.InnerResidual(xp,xbar,sigma);
 				mp = 1/2*norm(ri)^2;
-
 				if mp <= m0 - 2*t*o.eta*merit_buffer(1)
 					break;
 				else
@@ -252,10 +306,30 @@ methods(Access = public)
 			x.axpy(t,dx);
 			out.newton_iters = out.newton_iters+1;
 		end % pfb loop
-		% project duals onto the nonnegative orthant
+
+		% Iteration timeout flag
+		flag = 3;
+		% Project duals onto the nonnegative orthant
 		x.ProjectDuals();
 	end
 
+	% Computes the tolerances at a given point.
+	function tol = GetTolerances(o,x)
+		o.ztol = max([norm(o.data.H(x.z),'inf');
+			       norm(o.data.AT(x.v),'inf');
+			       norm(o.data.GT(x.l),'inf');
+			       o.fnorm]);
+		o.ltol = max([norm(o.data.G(x.z),'inf');o.hnorm]);
+		o.vtol = max([norm(o.data.A(x.z),'inf'),o.bnorm]);
+
+		o.ztol = o.rtol*o.ztol + o.tol;
+		o.ltol = o.rtol*o.ltol + o.tol;
+		o.vtol = o.rtol*o.vtol + o.tol;
+
+		tol.z = o.ztol;
+		tol.l = o.ltol;
+		tol.v = o.vtol;
+	end
 	% printing
 	function PrintFinal(o,out,r)
 		if o.display_level >= 1
@@ -284,31 +358,31 @@ methods(Access = public)
 			a3 = int32(out.newton_iters);
 			a4 = int32(o.max_newton_iters);
 			fprintf('Newton iterations: %d out of %d\n', a3, a4);
-			fprintf('%10s  %10s  %10s  %10s\n','|rz|','|rl|','|rv|','Tolerance');
-			fprintf('%10.4e  %10.4e  %10.4e  %10.4e\n',rz,rl,rv,o.tol);
+			fprintf('%10s  %10s  %10s  %10s  %10s  %10s\n ','|rz|','|rl|','|rv|','z tol','l tol','v tol');
+			fprintf('%10.4e  %10.4e  %10.4e  %10.4e  %10.4e  %10.4e\n',rz,rl,rv,o.ztol,o.ltol,o.vtol);
 		end
 	end
 
 	function PrintIterationHeader(o)
 		if o.display_level == 2
-			fprintf('%12s %12s %12s %12s %12s %12s %12s \n','prox iter','newton iters','|rz|','|rl|','|rv|','Inner res','Inner tol');
+			fprintf('%12s %12s %12s %12s %12s %12s %12s %12s\n','prox iter','newton iters','|rz|','|rl|','|rv|','Inner res','Inner tol','sigma');
 		end
 	end
 
-	function PrintIterationLine(o,prox_iters,newton_iters,rk,ri,itol)
+	function PrintIterationLine(o,prox_iters,newton_iters,rk,ri,itol,sigma)
 		if o.display_level == 2
 			[rz,rl,rv] = rk.GetNorms();
 			a1 = int32(prox_iters);
 			a2 = int32(newton_iters);
-			fprintf('%12d %12d %12.4e %12.4e %12.4e %12.4e %12.4e\n',a1,a2,rz,rl,rv,ri.norm(),itol);
+			fprintf('%12d %12d %12.4e %12.4e %12.4e %12.4e %12.4e %12.4e\n',a1,a2,rz,rl,rv,ri.norm(),itol,sigma);
 		end
 	end
 
-	function PrintDetailedHeader(o,prox_iters, newton_iters, r)
+	function PrintDetailedHeader(o,prox_iters, newton_iters, r,sigma)
 		if o.display_level == 3
 			a1 = int32(prox_iters);
 			a2 = int32(newton_iters);
-			fprintf('Begin Prox Iter: %d, Total Newton Iters: %d, Residual: %6.4e\n',a1,a2,r.norm());
+			fprintf('Begin Prox Iter: %d, Total Newton Iters: %d, Residual: %6.4e, sigma: %6.4e\n',a1,a2,r.norm(),sigma);
 
 			fprintf('%10s  %10s  %10s  %10s  %10s\n','Iter','Step Size','|rz|','|rl|','|rv|');
 		end
@@ -335,6 +409,18 @@ methods(Access = public)
 			o.sigma = opts.sigma;
 		end
 
+		if isfield(opts,'sigma_min')
+			o.sigma_min = opts.sigma_min;
+		end
+
+		if isfield(opts,'sigma_max')
+			o.sigma_max = opts.sigma_max;
+		end
+
+		if isfield(opts,'use_nonmonotone_linesearch')
+			o.use_nonmonotone_linesearch = opts.use_nonmonotone_linesearch;
+		end
+		
 		if isfield(opts,'itol_red_factor')
 			o.itol_red_factor = opts.itol_red_factor;
 		end
