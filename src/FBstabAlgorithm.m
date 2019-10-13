@@ -9,7 +9,7 @@ properties(Access = private)
 	% algorithm parameters
 	sigma = 1000*sqrt(eps);
 	sigma_max = eps^(1/4);
-	sigma_min = 1e-8;
+	sigma_min = 1e-10;
 	max_newton_iters = 500;
 	max_prox_iters = 100;
 	tol = 1e-6;
@@ -20,12 +20,13 @@ properties(Access = private)
 	alpha = 0.95;
 	beta = 0.9;
 	eta = 1e-8;
-	lsmax = 30;
+	lsmax = 40;
 	max_inner_iters = 50;
 	itol_max = 1e-1;
 	itol_min = 1e-12;
 	itol_red_factor = 1/5;
 	use_nonmonotone_linesearch = false;
+	itol_relaxed = sqrt(eps);
 
 	% display settings
 	% 0 = none
@@ -41,7 +42,6 @@ properties(Access = private)
 	% residual objects
 	rk; 
 	ri;
-
 	% variable objects
 	xi;
 	xk;
@@ -148,39 +148,36 @@ methods(Access = public)
 			o.PrintDetailedHeader(out.prox_iters,out.newton_iters,rk,sigma);
 			o.PrintIterationLine(out.prox_iters,out.newton_iters,rk,ri,itol,sigma);
 			
-			
+			Ek_old = Ek;
 			% Call inner solver *************************************
 			[Ei,Ek,out,flag] = o.SolveSubproblemFBRS(sigma,itol,Ek,out);
 
 			% Reduce sigma if the iteration is deemed to have stalled or is successfull.
-			if(flag == 2)
-				sigma = max(sigma/10,o.sigma_min);
-			elseif(flag == 1) 
-				sigma = max(sigma/10,o.sigma_min);
-			end
-
-			% Reset sigma after an iteration timeout.
-			% This indicates that the inner solver failed.
-			if(flag == 3)
-				sigma = o.sigma;
-			end
-			
-			% Update inner tolerance
 			if(flag == 1 || flag == 2)
+				sigma = max(sigma/10,o.sigma_min);
 				itol = o.saturate(o.itol_red_factor*itol,o.itol_min,Ek);
+			elseif(flag == 5)
+				sigma = max(sigma/10,o.sigma_min);
 			end
-
+			% Increase sigma after an iteration timeout that indicates 
+			% that the inner solver failed.
+			if(flag == 3)
+				sigma = o.saturate(sigma*10,o.sigma_min,o.sigma_max);
+				itol = o.saturate(itol/o.itol_red_factor,o.itol_min,Ek);
+			end
 			if(flag == -1)
 				break;
 			end
 
-			% dx = xi - xk	
-			dx.Copy(xi);
-			dx.axpy(-1,xk);
-			xk.Copy(xi);
-
+			% Accept the update if it decreases the problem residual
+			if Ek <= Ek_old
+				% dx = xi - xk	
+				dx.Copy(xi);
+				dx.axpy(-1,xk);
+				xk.Copy(xi);
+			end
 			% Feasibility Check
-			if o.check_infeasibility
+			if o.check_infeasibility && Ek <= Ek_old
 				[primal,dual] = o.feas_checker.CheckFeasibility(dx,o.inf_tol);
 				if ~primal && ~dual
 					out.eflag = -5;
@@ -194,7 +191,6 @@ methods(Access = public)
 					out.res = rk.norm();
 					o.PrintFinal(out,rk);
 					return;
-
 				elseif ~dual
 					out.eflag = -4;
 					x = dx.StructWrite();
@@ -226,6 +222,7 @@ methods(Access = public)
 		% 2: Stall, subproblem solved but no progress is made -> reduce sigma
 		% 3: Out of iterations: don't reduce itol
 		% 4: itol_min hit -> usually happens during infeasibility detection
+		% 5: having trouble hitting full target but can hit relaxed -> reduce sigma
 		% -1: Out of newton iterations
 		flag = 1;
 		merit_buffer = zeros(5,1);
@@ -247,20 +244,19 @@ methods(Access = public)
 				flag = 2;
 				o.PrintDetailedFooter(itol,ri);
 				return;
-			elseif (Ei <= itol*min(1,norm(dx)) && norm(rk) <= Eouter)
+			elseif (Ei <= itol*min(1,norm(dx)) && norm(rk) < Eouter)
 				flag = 1;
 				o.PrintDetailedFooter(itol,ri);
 				return;
-			elseif (Ei <= o.itol_min && norm(rk) >= Eouter)
+			elseif (Ei <= o.itol_min*100 && norm(rk) <= Eouter)
 				o.PrintDetailedFooter(itol,ri);
-				flag = 2;
+				flag = 5;
 				return;
 			elseif (Ei <= o.itol_min)
 				o.PrintDetailedFooter(itol,ri);
 				flag = 4;
 				return;
 			end
-
 			o.PrintDetailedLine(j,t,ri);
 
 			if out.newton_iters >= o.max_newton_iters
@@ -302,25 +298,19 @@ methods(Access = public)
 					t = o.beta*t;
 				end
 			end
-			% update x = x + t*dx
-			x.axpy(t,dx);
+			x.axpy(t,dx);  % x = x + t*dx
 			out.newton_iters = out.newton_iters+1;
 		end % pfb loop
-
 		% Iteration timeout flag
 		flag = 3;
-		% Project duals onto the nonnegative orthant
 		x.ProjectDuals();
 	end
 
 	% Computes the tolerances at a given point.
 	function tol = GetTolerances(o,x)
-		o.ztol = max([norm(o.data.H(x.z),'inf');
-			       norm(o.data.AT(x.v),'inf');
-			       norm(o.data.GT(x.l),'inf');
-			       o.fnorm]);
-		o.ltol = max([norm(o.data.G(x.z),'inf');o.hnorm]);
-		o.vtol = max([norm(o.data.A(x.z),'inf'),o.bnorm]);
+		o.ztol = o.fnorm + 1;
+		o.ltol = o.hnorm + 1;
+		o.vtol = o.bnorm + 1;
 
 		o.ztol = o.rtol*o.ztol + o.tol;
 		o.ltol = o.rtol*o.ltol + o.tol;

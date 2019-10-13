@@ -1,4 +1,4 @@
-% fbstab_mpc: Proximally Stabilized Semismooth Method for solving QPs
+%% fbstab_mpc: Proximally Stabilized Semismooth Method for solving QPs
 % [x,u,out] = fbstab_mpc(x0,mpc,opts) attempts to solve the 
 % following quadratic programming problem:
 %
