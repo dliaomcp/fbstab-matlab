@@ -156,12 +156,12 @@ methods(Access = public)
 			if(flag == 1 || flag == 2)
 				sigma = max(sigma/10,o.sigma_min);
 				itol = o.saturate(o.itol_red_factor*itol,o.itol_min,Ek);
-			elseif(flag == 5)
+			elseif(flag == 5) % if the subproblem was roughly solved
 				sigma = max(sigma/10,o.sigma_min);
 			end
 			% Increase sigma after an iteration timeout that indicates 
 			% that the inner solver failed.
-			if(flag == 3)
+			if(flag == 3 || flag == 6)
 				sigma = o.saturate(sigma*10,o.sigma_min,o.sigma_max);
 				itol = o.saturate(itol/o.itol_red_factor,o.itol_min,Ek);
 			end
@@ -169,15 +169,10 @@ methods(Access = public)
 				break;
 			end
 
-			% Accept the update if it decreases the problem residual
-			if Ek <= Ek_old
-				% dx = xi - xk	
-				dx.Copy(xi);
-				dx.axpy(-1,xk);
-				xk.Copy(xi);
-			end
-			% Feasibility Check
-			if o.check_infeasibility && Ek <= Ek_old
+			% Feasibility Check	
+			dx.Copy(xi);
+			dx.axpy(-1,xk); % dx = xi - xk
+			if o.check_infeasibility
 				[primal,dual] = o.feas_checker.CheckFeasibility(dx,o.inf_tol);
 				if ~primal && ~dual
 					out.eflag = -5;
@@ -198,6 +193,13 @@ methods(Access = public)
 					o.PrintFinal(out,rk);
 					return;
 				end
+			end
+
+			if Ek <= Ek_old && ~o.check_infeasibility
+				xk.Copy(xi);
+			elseif flag == 1 || flag == 4 || flag == 5
+				% Accept the update if the subproblem was declared solved
+				xk.Copy(xi);
 			end
 			out.prox_iters = out.prox_iters +1;
 		end % prox loop
@@ -223,12 +225,12 @@ methods(Access = public)
 		% 3: Out of iterations: don't reduce itol
 		% 4: itol_min hit -> usually happens during infeasibility detection
 		% 5: having trouble hitting full target but can hit relaxed -> reduce sigma
+		% 6: Divergence detected -> usually a linalg failure, increase sigma
 		% -1: Out of newton iterations
 		flag = 1;
 		merit_buffer = zeros(5,1);
 		t = 1;
 		Ei = 0;
-
 		x.Copy(xbar);
 		for j = 1:o.max_inner_iters
 			% Convergence check.
@@ -239,12 +241,11 @@ methods(Access = public)
 			Ek = rk.norm();
 			dx.Copy(x);
 			dx.axpy(-1,xbar);
-
-			if (Ei <= itol*min(1,norm(dx)) && norm(rk) >= Eouter)
+			if (Ei <= itol*min(1,norm(dx)) && norm(rk) > Eouter)
 				flag = 2;
 				o.PrintDetailedFooter(itol,ri);
 				return;
-			elseif (Ei <= itol*min(1,norm(dx)) && norm(rk) < Eouter)
+			elseif (Ei <= itol*min(1,norm(dx)) && norm(rk) <= Eouter)
 				flag = 1;
 				o.PrintDetailedFooter(itol,ri);
 				return;
