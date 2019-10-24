@@ -36,34 +36,7 @@
 %	L = L0,L1,... \in [nc,nu,N+1]
 %	d = d0,d1,... \in [nc,N+1]
 % 
-% opts: A structure containing any of the following fields
-% 	sigma{sqrt(eps)}: Initial stabilization parameter
-%	max_newton_iters{500}: Maximum total number of Newton iterations
-% 	max_prox_iters{100}: maximum number of prox iterations allowed
-% 	max_inner_iters{100}: Maximum allowable number of inner iterations
-% 	tol{1e-6}: Absolute tolerance
-%   rtol{1e-12}: Relative tolerance
-%   inftol{1e-8}: Infeasibility tolerance
-%	dtol{1e-12}: Stall tolerance
-% 	beta{0.7}: backtracking linesearch parameter 
-% 	eta{1e-8}: sufficient decrease parameter
-% 	lsmax{20}: maximum number of linesearch iterations
-% 	alpha{0.95}: penalized FB function parameter
-%	check_infeasibility{true}: check for feasibility
-%	itol_max{1e-1}: maximum inner tolerance
-%	itol_min{10*eps}: minimum inner tolerance
-%	itol_red_factor{1/10}: reduction factor for the inner tolerance
-%
-%	display_level{0}: controls printed output
-%				   0: Silent
-%				   1: Final 
-%				   2: Iter 
-%				   3: Iter detailed 
-%
-%	linear_solver{ric}: Which linear solver to use
-%	               ric: Ricatti recursion based method
-%				   pcg: Implicit conjugate gradient
-%				   ldl: Banded LDL
+% opts: Options structure, see fbstab_options.m
 % 
 % Outputs:
 % x: Structure with the following fields

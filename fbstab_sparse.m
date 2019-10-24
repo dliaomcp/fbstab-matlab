@@ -24,6 +24,8 @@
 %   h: m x 1
 %   A: q x n Sparse matrix
 %   b: q x 1
+%
+% opts: Options structure, see fbstab_options.m
 % 
 % Outputs:
 % x: Structure with the following fields

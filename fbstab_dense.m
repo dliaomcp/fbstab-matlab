@@ -18,23 +18,8 @@
 % 	b: q x 1 Constraint vector
 % x0: n x 1 Primal initial guess, use 0 if unsure
 % v0: q x 1 Dual initial guess, use 0 if unsure
-% opts: A structure containing any of the following fields
-% 	sigma: Stabilization parameter
-% 	max_prox_iters: maximum number of prox iterations allowed
-%   max_newton_iters: Maximum total number of Newton iterations
-% 	inner_iters: Maximum allowable number of inner iterations
-% 	tol: Absolute tolerance
-%   rtol: Relative tolerance
-%   inftol: Infeasibility tolerance
-% 	enable_prescaling: enables or disables automatic prescaling
-% 	beta: backtracking linesearch parameter 
-% 	eta: sufficient decrease parameter
-% 	lnm: recurrence length for non-monotone linesearch, set to 1 for a 
-%   regular linesearch
-% 	lsmax: maximum number of linesearch iterations
-% 	alpha: penalized FB function parameter
-%   veps_max: maximum error tolerance for the semismooth solver
-% A default value will be used for any missing fields
+%
+% opts: Options structure, see fbstab_options.m
 %
 % Outputs:
 % x: n x 1 Primal solution

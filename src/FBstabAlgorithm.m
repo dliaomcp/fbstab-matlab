@@ -7,10 +7,10 @@
 classdef FBstabAlgorithm < handle
 properties(Access = private)
 	% algorithm parameters
-	sigma = 1000*sqrt(eps);
-	sigma_max = eps^(1/4);
-	sigma_min = 1e-10;
-	max_newton_iters = 500;
+	sigma = sqrt(eps);
+	sigma_max = sqrt(eps)
+	sigma_min = sqrt(eps);
+	max_newton_iters = 200;
 	max_prox_iters = 100;
 	tol = 1e-6;
 	rtol = 1e-12;
@@ -18,14 +18,14 @@ properties(Access = private)
 	inf_tol = 1e-8;
 	check_infeasibility = true;
 	alpha = 0.95;
-	beta = 0.9;
+	beta = 0.8;
 	eta = 1e-8;
 	lsmax = 40;
 	max_inner_iters = 50;
 	itol_max = 1e-1;
 	itol_min = 1e-12;
 	itol_red_factor = 1/5;
-	use_nonmonotone_linesearch = false;
+	use_nonmonotone_linesearch = true;
 	itol_relaxed = sqrt(eps);
 
 	% display settings
@@ -33,7 +33,7 @@ properties(Access = private)
 	% 1 = final
 	% 2 = outer iters
 	% 3 = inner iters
-	display_level = 0;
+	display_level = 1;
 
 	% constituent classes
 	data; % qp data object
@@ -47,7 +47,6 @@ properties(Access = private)
 	xk;
 	xp;
 	dx;
-
 end % properties
 
 properties(Access = private)
@@ -151,7 +150,8 @@ methods(Access = public)
 			Ek_old = Ek;
 			% Call inner solver *************************************
 			[Ei,Ek,out,flag] = o.SolveSubproblemFBRS(sigma,itol,Ek,out);
-
+			out.prox_iters = out.prox_iters +1;
+			
 			% Reduce sigma if the iteration is deemed to have stalled or is successfull.
 			if(flag == 1 || flag == 2)
 				sigma = max(sigma/10,o.sigma_min);
@@ -201,7 +201,6 @@ methods(Access = public)
 				% Accept the update if the subproblem was declared solved
 				xk.Copy(xi);
 			end
-			out.prox_iters = out.prox_iters +1;
 		end % prox loop
 
 		% output solution
