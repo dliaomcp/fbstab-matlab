@@ -9,7 +9,11 @@ close all
 clc
 
 
-N = 3;
+Q = diag([0;0]);
+R = 0;
+S = [0,0];
+q = [-1;-1];
+r = 0;
 
 % Double integrator matrices
 % x = [r;v]
@@ -21,12 +25,31 @@ x0 = [0;0];
 nx = 2;
 nu = 1;
 
+fprintf('Degenerate Double Integrator Example:\n\n');
+N = 4;
+
+E = [1,0;-1,0;0,0;0,0;0,0];
+L = [0;0;1;-1;0];
+d = [-4;4;-1;-1;0];
+nc = length(d);
+
+mpc = ExtendOverHorizon(N,Q,R,S,q,r,A,B,c,x0,E,L,d);
+for i = 1:N
+  mpc.E(:,:,i) = zeros(nc,nx);
+  mpc.d(1:2,i) = [0;0];
+end
+
+nz = (nx+nu)*(N+1);
+nl = nx*(N+1);
+nv = nc*(N+1);
+x.z = zeros(nz,1);
+x.l = zeros(nl,1);
+x.v = zeros(nv,1);
+
+[x,~,out] = fbstab_mpc(x,mpc);
+
 fprintf('Infeasible Double Integrator Example:\n\n');
-Q = diag([0;0]);
-R = 0;
-S = [0,0];
-q = [-1;-1];
-r = 0;
+N = 3;
 
 % r(N) = 4 -> 4 <= r(N) <= 4
 % |u(i)| <= 1
@@ -51,7 +74,7 @@ x.v = zeros(nv,1);
 [x,~,out] = fbstab_mpc(x,mpc);
 
 fprintf('Unbounded Below Double Integrator Example:\n\n');
-
+N = 3;
 Q = diag([0;0]);
 R = 0;
 S = [0,0];
