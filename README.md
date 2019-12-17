@@ -1,5 +1,5 @@
 # fbstab-matlab
-A MATLAB implementation of the Proximally Stabilized Fischer-Burmeister (FBstab) quadratic programming solver. 
+A MATLAB implementation of the Proximally Stabilized Fischer-Burmeister (FBstab) quadratic programming solver. A C++ implementation is under development and is available here: https://github.com/dliaomcp/fbstab.
 
 ## Instructions
 Navigate to the root folder then run setpath.m. The directory is arranged assuming that everything is run from the root.
