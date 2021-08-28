@@ -39,6 +39,7 @@ properties(Access = public)
 	% useful vectors
 	f;
 	b;
+	h = 0;
 end % properties
 
 methods(Access = public)

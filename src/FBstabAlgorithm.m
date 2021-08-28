@@ -125,6 +125,7 @@ methods(Access = public)
 		
 		o.PrintIterationHeader();
 
+		Ek = 0;
 		% Begin the main proximal loop.
 		for k = 1:o.max_prox_iters
 			% Termination check.
