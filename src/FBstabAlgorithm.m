@@ -232,6 +232,7 @@ methods(Access = public)
 		t = 1;
 		Ei = 0;
 		x.Copy(xbar);
+		Ek = 0;
 		for j = 1:o.max_inner_iters
 			% Convergence check.
 			ri.InnerResidual(x,xbar,sigma);

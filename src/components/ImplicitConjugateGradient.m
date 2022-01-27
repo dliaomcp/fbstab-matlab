@@ -52,7 +52,7 @@ classdef ImplicitConjugateGradient < handle
 		% compute the reduced residual
 		r1 = r.rz - o.data.AT(r.rv./o.mus);
 
-		[dx.z,res] = o.ConjugateGradient(r1,1e-8,nz);
+		[dx.z,res] = o.ConjugateGradient(r1(:,1),1e-8,nz);
 
 		% Recover Inequality duals
 		dx.v = (r.rv + o.gamma.*o.data.A(dx.z))./o.mus;
@@ -66,8 +66,9 @@ end % public methods
 methods(Access = private)
 	function [x,res] = ConjugateGradient(o,b,tol,kmax)
 		n = length(b);
-		x = zeros(n,1);
+		% x = zeros(n,1);
 		r = b;
+		x = 0*b(:);
 		bb = dot(b,b);
 		tau = dot(r,o.invT(r));
 		p = zeros(n,1);
@@ -79,14 +80,14 @@ methods(Access = private)
 				break;
 			end
 			z = o.invT(r);
-			z = r;
 			tau1 = tau;
 			tau = dot(z,r);
+
 			if k == 1
 				p = z;
 			else
 				beta = tau/tau1;
-				p = z+beta*p;
+				p = z + beta*p;
 			end
 			w = o.Kapply(p);
 			alpha = tau/dot(p,w);

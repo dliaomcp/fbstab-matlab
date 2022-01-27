@@ -106,8 +106,9 @@ methods(Access = public)
 	% compute A'*v
 	function y = AT(obj,v)
 		[nx,nu,nc,N] = OcpSize(obj);
-		y = zeros(nu*(N+1));
+		y = zeros(nu*(N+1),1);
 		y = obj.LT(v) + obj.MT(obj.ET(v));
+		y = y(:,1);
 	
 	end
 
